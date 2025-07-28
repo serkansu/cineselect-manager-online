@@ -1,18 +1,17 @@
+import os
+import json
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, db
 
-cred = credentials.Certificate("serviceAccountKey.json")
+def get_database():
+    # Ortam değişkeninden JSON stringini al ve parse et
+    firebase_key_json = os.environ.get("FIREBASE_SERVICE_KEY")
+    service_account_info = json.loads(firebase_key_json)
 
-if not firebase_admin._apps:
-    firebase_admin.initialize_app(cred)
+    # Firebase'e bağlan
+    cred = credentials.Certificate(service_account_info)
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://senin-projen-id.firebaseio.com'
+    })
 
-db = firestore.client()
-
-def test_connection():
-    print("✅ Firebase bağlantısı kuruluyor...")
-    test_ref = db.collection("test").document("connection")
-    test_ref.set({"status": "connected"})
-    print("🎉 Bağlantı başarılı ve Firestore'a veri yazıldı.")
-
-if __name__ == "__main__":
-    test_connection()
+    return db
