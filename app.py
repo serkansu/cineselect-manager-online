@@ -1,3 +1,4 @@
+
 import streamlit as st
 import requests
 import json
@@ -35,6 +36,7 @@ if query:
         poster_path = item.get("poster_path", "")
         imdb_id = "tt0000000"
         year = (item.get("release_date") or item.get("first_air_date") or "")[:4]
+        tmdb_id = item.get("id")
 
         col1, col2 = st.columns([1, 4])
         with col1:
@@ -44,7 +46,7 @@ if query:
             st.subheader(title)
             st.write(overview)
             media_type = item.get("media_type", "movie")
-            if st.button(f"✅ Add to {media_type}", key=f"{title}-{media_type}"):
+            if st.button(f"✅ Add to {media_type}", key=f"{title}-{media_type}-{tmdb_id}"):
                 send_to_firebase({
                     "title": title,
                     "poster": f"https://image.tmdb.org/t/p/w500{poster_path}",
