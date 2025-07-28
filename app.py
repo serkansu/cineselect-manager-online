@@ -1,10 +1,11 @@
 import streamlit as st
 from firebase_setup import get_firestore
-db = get_firestore()
-from tmdb import search_movie, search_tv
+from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
 
-st.set_page_config(page_title="CineSelect Manager Online", layout="wide")
-st.markdown("<h1 style='text-align:center;'>🎮 CineSelect Manager by ss</h1>", unsafe_allow_html=True)
+db = get_firestore()
+
+st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
+st.markdown("<h1 style='text-align:center;'>🎮 Serkan's Watchagain Movies & Series ONLINE</h1>", unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 2])
 with col1:
@@ -17,7 +18,7 @@ with col2:
         st.session_state["show_posters"] = not st.session_state["show_posters"]
 
 show_posters = st.session_state["show_posters"]
-media_type = st.radio("Search type:", ["Movie", "TV Show"], horizontal=True)
+media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
 
 if "query" not in st.session_state:
     st.session_state.query = ""
@@ -25,7 +26,13 @@ if "query" not in st.session_state:
 query = st.text_input(f"🔍 Search for a {media_type.lower()}", value=st.session_state.query, key="query_input")
 if query:
     st.session_state.query = query
-    results = search_movie(query) if media_type == "Movie" else search_tv(query)
+    if media_type == "Movie":
+        results = search_movie(query)
+    elif media_type == "TV Show":
+        results = search_tv(query)
+    else:
+        results = search_by_actor(query)
+
     try:
         results = sorted(results, key=lambda x: x.get("cineselectRating", 0), reverse=True)
     except:
@@ -49,7 +56,7 @@ if query:
             manual_val = st.number_input("Manual value:", min_value=1, max_value=10000, value=slider_val, step=1, key=manual_key)
 
             if st.button("Add to Favorites", key=f"btn_{item['id']}"):
-                media_key = "movie" if media_type == "Movie" else "show"
+                media_key = "movie" if media_type == "Movie" else ("show" if media_type == "TV Show" else "movie")
                 db.collection("favorites").document(item["id"]).set({
                     "id": item["id"],
                     "title": item["title"],
@@ -113,7 +120,7 @@ def show_favorites(fav_type, label):
 
 if media_type == "Movie":
     show_favorites("movie", "Favorite Movies")
-else:
+elif media_type == "TV Show":
     show_favorites("show", "Favorite TV Shows")
 
 st.markdown("---")
