@@ -1,7 +1,8 @@
-import streamlit as st
 from firebase_setup import get_firestore
-db = get_firestore()
+import streamlit as st
 from tmdb import search_movie, search_tv
+
+db = get_firestore()
 
 st.set_page_config(page_title="CineSelect Manager Online", layout="wide")
 st.markdown("<h1 style='text-align:center;'>🎬 CineSelect Manager by ss</h1>", unsafe_allow_html=True)
