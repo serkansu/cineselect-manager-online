@@ -38,7 +38,7 @@ if query:
             st.divider()
             if item["poster"] and show_posters:
                 st.image(item["poster"], width=180)
-            st.markdown(f"**{item['title']} ({item['year']})**")
+            st.markdown(f"**{idx+1}. {item['title']} ({item['year']})**")
             imdb_display = f"{item['imdb']:.1f}" if isinstance(item['imdb'], (int, float)) and item['imdb'] > 0 else "N/A"
             rt_display = f"{item['rt']}%" if isinstance(item['rt'], (int, float)) and item['rt'] > 0 else "N/A"
             st.markdown(f"⭐ IMDb: {imdb_display} &nbsp;&nbsp; 🍅 RT: {rt_display}", unsafe_allow_html=True)
@@ -61,6 +61,7 @@ if query:
                     "type": media_key
                 })
                 st.success(f"✅ {item['title']} added to favorites!")
+                st.session_state.query = ""
                 st.rerun()
 
 st.divider()
@@ -93,7 +94,7 @@ def show_favorites(fav_type, label):
             if show_posters and fav.get("poster"):
                 st.image(fav["poster"], width=120)
         with cols[1]:
-            st.markdown(f"**{fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
+            st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
         with cols[2]:
             if st.button("❌", key=f"remove_{fav['id']}"):
                 db.collection("favorites").document(fav["id"]).delete()
