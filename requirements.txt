@@ -1,6 +1,5 @@
 streamlit
-python_jwt
-gcloud
-pyrebase4
 requests
 firebase-admin
+google-cloud-firestore
+python-dotenv
