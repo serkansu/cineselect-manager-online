@@ -3,3 +3,4 @@ python_jwt
 gcloud
 pyrebase4
 requests
+firebase-admin
