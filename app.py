@@ -1,5 +1,6 @@
 import streamlit as st
-from firebase_setup import db
+from firebase_setup import get_firestore
+db = get_firestore()
 from tmdb import search_movie, search_tv
 
 st.set_page_config(page_title="CineSelect Manager Online", layout="wide")
