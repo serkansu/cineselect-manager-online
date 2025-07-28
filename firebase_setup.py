@@ -11,7 +11,7 @@ def get_database():
     # Firebase'e bağlan
     cred = credentials.Certificate(service_account_info)
     firebase_admin.initialize_app(cred, {
-        'databaseURL': 'https://senin-projen-id.firebaseio.com'
+        'databaseURL': 'https://cine-select-default-rtdb.europe-west1.firebasedatabase.app/'
     })
 
     return db
