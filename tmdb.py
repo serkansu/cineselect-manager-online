@@ -1,3 +1,4 @@
+
 import requests
 import json
 from omdb import fetch_ratings  # Yeni eklendi
@@ -16,8 +17,7 @@ def search_movie(query):
         poster = f"{POSTER_BASE}{item['poster_path']}" if item.get("poster_path") else ""
         description = item.get("overview", "")
 
-        imdb, rt = fetch_ratings(title, year)  # OMDb'den puan çekiyoruz
-
+        imdb, rt = fetch_ratings(title, year)
         results.append({
             "id": f"tmdb{item['id']}",
             "title": title,
@@ -39,8 +39,7 @@ def search_tv(query):
         poster = f"{POSTER_BASE}{item['poster_path']}" if item.get("poster_path") else ""
         description = item.get("overview", "")
 
-        imdb, rt = fetch_ratings(title, year)  # OMDb'den puan çekiyoruz
-
+        imdb, rt = fetch_ratings(title, year)
         results.append({
             "id": f"tmdb{item['id']}",
             "title": title,
@@ -52,19 +51,28 @@ def search_tv(query):
         })
     return results
 
-def add_to_favorites(item, stars, media_type):
-    filename = "favorites.json"
-    try:
-        with open(filename, "r") as f:
-            data = json.load(f)
-            if isinstance(data, list):
-                data = {"movies": data, "shows": []}
-    except:
-        data = {"movies": [], "shows": []}
-
-    key = "movies" if media_type == "movie" else "shows"
-    item["cineselectRating"] = stars
-    data[key].append(item)
-
-    with open(filename, "w") as f:
-        json.dump(data, f, indent=2)
+def search_by_actor(actor_name):
+    url = f"{BASE_URL}/search/person?api_key={API_KEY}&query={actor_name}"
+    res = requests.get(url).json()
+    actor_results = []
+    for actor in res.get("results", []):
+        actor_id = actor.get("id")
+        if not actor_id:
+            continue
+        credits_url = f"{BASE_URL}/person/{actor_id}/combined_credits?api_key={API_KEY}"
+        credits_res = requests.get(credits_url).json()
+        for item in credits_res.get("cast", []):
+            title = item.get("title") or item.get("name")
+            year = (item.get("release_date") or item.get("first_air_date") or "")[:4]
+            poster = f"{POSTER_BASE}{item['poster_path']}" if item.get("poster_path") else ""
+            imdb, rt = fetch_ratings(title, year)
+            actor_results.append({
+                "id": f"tmdb{item['id']}",
+                "title": title,
+                "year": year,
+                "poster": poster,
+                "description": "",
+                "imdb": imdb,
+                "rt": rt
+            })
+    return actor_results
