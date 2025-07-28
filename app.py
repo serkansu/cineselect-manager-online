@@ -5,7 +5,9 @@ from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiy
 db = get_firestore()
 
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
-st.markdown("<h1 style='text-align:center;'>🎮 Serkan's Watchagain Movies & Series ONLINE</h1>", unsafe_allow_html=True)
+st.markdown("""
+    <h1 style='text-align:center;'>🍿 <b>Serkan's Watchagain Movies & Series <span style="color:#2ecc71;">ONLINE ✅</span></b></h1>
+""", unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 2])
 with col1:
