@@ -8,13 +8,12 @@ def get_database():
     encoded_key = os.environ.get("FIREBASE_SERVICE_KEY_B64")
     decoded_json = base64.b64decode(encoded_key).decode("utf-8")
 
-    # Gerçek satır sonlarını sil, sadece kaçışlı olanları bırak
-    # İlk olarak \r ve \n karakterlerini escape'li hale çeviriyoruz
-    cleaned = decoded_json.replace('\r', '\\r').replace('\n', '\\n')
+    # JSON içindeki kaçış karakterlerini düzelt
+    corrected = decoded_json.encode('utf-8').decode('unicode_escape')
 
-    # Ardından JSON olarak yükle
-    service_account_info = json.loads(cleaned)
+    service_account_info = json.loads(corrected)
 
+    # initialize_app sadece bir kez çağrılsın
     if not firebase_admin._apps:
         cred = credentials.Certificate(service_account_info)
         firebase_admin.initialize_app(cred, {
