@@ -1,11 +1,10 @@
-from firebase_setup import get_firestore
 import streamlit as st
+from firebase_setup import get_firestore
+db = get_firestore()
 from tmdb import search_movie, search_tv
 
-db = get_firestore()
-
 st.set_page_config(page_title="CineSelect Manager Online", layout="wide")
-st.markdown("<h1 style='text-align:center;'>🎬 CineSelect Manager by ss</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center;'>🎮 CineSelect Manager by ss</h1>", unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 2])
 with col1:
@@ -46,8 +45,8 @@ if query:
 
             slider_key = f"stars_{item['id']}"
             manual_key = f"manual_{item['id']}"
-            st.session_state[slider_key] = st.slider("🎯 CineSelect Rating:", 1, 10000, st.session_state.get(slider_key, 5000), step=10, key=slider_key)
-            st.session_state[manual_key] = st.number_input("Manual value:", min_value=1, max_value=10000, value=st.session_state[slider_key], step=1, key=manual_key)
+            slider_val = st.slider("🎯 CineSelect Rating:", 1, 10000, st.session_state.get(slider_key, 5000), step=10, key=slider_key)
+            manual_val = st.number_input("Manual value:", min_value=1, max_value=10000, value=slider_val, step=1, key=manual_key)
 
             if st.button("Add to Favorites", key=f"btn_{item['id']}"):
                 media_key = "movie" if media_type == "Movie" else "show"
@@ -58,7 +57,7 @@ if query:
                     "imdb": item["imdb"],
                     "poster": item["poster"],
                     "rt": item["rt"],
-                    "cineselectRating": st.session_state[manual_key],
+                    "cineselectRating": manual_val,
                     "type": media_key
                 })
                 st.success(f"✅ {item['title']} added to favorites!")
@@ -84,7 +83,7 @@ def get_sort_key(fav):
 def show_favorites(fav_type, label):
     docs = db.collection("favorites").where("type", "==", fav_type).stream()
     favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
-    
+
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
         imdb_display = f"{fav['imdb']:.1f}" if isinstance(fav["imdb"], (int, float)) else "N/A"
