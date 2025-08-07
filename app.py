@@ -111,12 +111,46 @@ show_favorites("shows", "Favorite TV Shows")
 st.markdown("---")
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
 
-import subprocess
-
-st.markdown("---")
-if st.button("🔄 Senkronize Et (GitHub’a Gönder)"):
+# 👇 GitHub'a manuel senkronizasyon butonu
+st.markdown("## ")
+if st.button("🔄 Senkronize Et (GitHub'a Push Et)"):
     try:
-        subprocess.run(["python3", "fetch_and_push_auto.py"], check=True)
-        st.success("✅ GitHub güncelleme işlemi başarıyla tamamlandı.")
-    except subprocess.CalledProcessError:
-        st.error("❌ GitHub güncelleme sırasında hata oluştu.")
+        # fetch_and_push_auto.py içeriği doğrudan burada çalıştırılıyor
+        import json
+        import os
+        from github import Github
+        
+        # --- GitHub Ayarları ---
+        GITHUB_TOKEN = "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"
+        REPO_NAME = "serkansu/cineselect-addon"
+        FILE_PATH = "favorites.json"
+        LOCAL_FILE = "favorites_updated.json"
+        COMMIT_MESSAGE = "🆕 Auto-update favorites.json (via script)"
+        
+        # --- GitHub bağlantısı kur ---
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(REPO_NAME)
+        
+        try:
+            # Yerel dosyayı oku
+            with open(LOCAL_FILE, "r", encoding="utf-8") as f:
+                content = f.read()
+        
+            # Uzak dosyanın mevcut içeriğini al
+            contents = repo.get_contents(FILE_PATH)
+        
+            # GitHub dosyasını güncelle
+            repo.update_file(
+                path=contents.path,
+                message=COMMIT_MESSAGE,
+                content=content,
+                sha=contents.sha
+            )
+        
+            print("✅ GitHub'daki favorites.json başarıyla güncellendi.")
+        
+        except Exception as e:
+            print(f"🚨 GitHub güncellemesinde hata oluştu: {e}")
+        st.success("🎉 GitHub senkronizasyonu başarıyla tamamlandı.")
+    except Exception as e:
+        st.error(f"❌ Senkronizasyon sırasında hata oluştu: {e}")
