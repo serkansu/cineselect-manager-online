@@ -110,3 +110,13 @@ show_favorites("shows", "Favorite TV Shows")
 # Footer
 st.markdown("---")
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
+
+import subprocess
+
+st.markdown("---")
+if st.button("🔄 Senkronize Et (GitHub’a Gönder)"):
+    try:
+        subprocess.run(["python3", "fetch_and_push_auto.py"], check=True)
+        st.success("✅ GitHub güncelleme işlemi başarıyla tamamlandı.")
+    except subprocess.CalledProcessError:
+        st.error("❌ GitHub güncelleme sırasında hata oluştu.")
