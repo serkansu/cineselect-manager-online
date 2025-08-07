@@ -11,6 +11,14 @@ def sync_with_firebase():
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
     st.success("✅ favorites.json dosyası senkronize edildi.")
+
+def show_favorites_count():
+    movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
+    show_docs = db.collection("favorites").where("type", "==", "show").stream()
+    movie_count = sum(1 for _ in movie_docs)
+    show_count = sum(1 for _ in show_docs)
+    st.success(f"🎬 Filmler: {movie_count} adet | 📺 Diziler: {show_count} adet")
+
 db = get_firestore()
 
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
@@ -22,24 +30,21 @@ col1, col2 = st.columns([1, 2])
 with col1:
     if st.button("🏠 Go to Top"):
         st.rerun()
+
 with col2:
     if "show_posters" not in st.session_state:
         st.session_state["show_posters"] = True
+
     if st.button("🖼️ Toggle Posters"):
         st.session_state["show_posters"] = not st.session_state["show_posters"]
+
     if st.button("🔄 Senkronize Et (Firebase JSON)"):
-        sync_with_firebase()  
+        sync_with_firebase()
         st.success("✅ favorites.json dosyası senkronize edildi.")
+
     if st.button("📊 Favori Sayılarını Göster"):
-    show_favorites_count()
-    def show_favorites_count():
-    movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
-    show_docs = db.collection("favorites").where("type", "==", "show").stream()
+        show_favorites_count()
 
-    movie_count = sum(1 for _ in movie_docs)
-    show_count = sum(1 for _ in show_docs)
-
-    st.success(f"🎬 Filmler: {movie_count} adet | 📺 Diziler: {show_count} adet")
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
 
@@ -47,6 +52,7 @@ if "query" not in st.session_state:
     st.session_state.query = ""
 
 query = st.text_input(f"🔍 Search for a {media_type.lower()}", value=st.session_state.query, key="query_input")
+
 if query:
     st.session_state.query = query
     if media_type == "Movie":
@@ -68,6 +74,7 @@ if query:
             st.divider()
             if item["poster"] and show_posters:
                 st.image(item["poster"], width=180)
+
             st.markdown(f"**{idx+1}. {item['title']} ({item['year']})**")
             imdb_display = f"{item['imdb']:.1f}" if isinstance(item['imdb'], (int, float)) and item['imdb'] > 0 else "N/A"
             rt_display = f"{item['rt']}%" if isinstance(item['rt'], (int, float)) and item['rt'] > 0 else "N/A"
@@ -149,4 +156,5 @@ elif media_type == "TV Show":
 st.markdown("---")
 if st.button("🔝 Go to Top Again"):
     st.rerun()
+
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
