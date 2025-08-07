@@ -28,8 +28,18 @@ with col2:
     if st.button("🖼️ Toggle Posters"):
         st.session_state["show_posters"] = not st.session_state["show_posters"]
     if st.button("🔄 Senkronize Et (Firebase JSON)"):
+        sync_with_firebase()  
+        st.success("✅ favorites.json dosyası senkronize edildi.")
+    if st.button("📊 Favori Sayılarını Göster"):
+    show_favorites_count()
+    def show_favorites_count():
+    movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
+    show_docs = db.collection("favorites").where("type", "==", "show").stream()
 
-        sync_with_firebase()    
+    movie_count = sum(1 for _ in movie_docs)
+    show_count = sum(1 for _ in show_docs)
+
+    st.success(f"🎬 Filmler: {movie_count} adet | 📺 Diziler: {show_count} adet")
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
 
