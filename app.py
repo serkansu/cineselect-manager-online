@@ -1,156 +1,131 @@
-# Kusursuz app.py + fetch_and_push_auto.py entegrasyonu
-import os
-import json
 import streamlit as st
-from tmdb import search_movie, search_tv, add_to_favorites
-from github import Github
-from dotenv import load_dotenv
+from firebase_setup import get_firestore
+from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
 
-# GitHub ayarları
-load_dotenv()
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", None)
-REPO_NAME = "serkansu/cineselect-addon"
-TARGET_FILE = "favorites.json"
+db = get_firestore()
 
-# Sayfa yapılandırması
-st.set_page_config(page_title="CineSelect Manager", layout="centered")
-st.title("🎬 CineSelect Manager")
+st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
+st.markdown("""
+    <h1 style='text-align:center;'>🍿 <b>Serkan's Watchagain Movies & Series <span style="color:#2ecc71;">ONLINE ✅</span></b></h1>
+""", unsafe_allow_html=True)
 
-# --- favorites.json eski format ise dönüştür ---
-def ensure_favorites_structure():
-    if os.path.exists("favorites.json"):
-        with open("favorites.json", "r") as f:
-            try:
-                data = json.load(f)
-                if isinstance(data, list):  # eski format
-                    new_data = {"movies": data, "shows": []}
-                    with open("favorites.json", "w") as fw:
-                        json.dump(new_data, fw, indent=2)
-            except:
-                pass
+col1, col2 = st.columns([1, 2])
+with col1:
+    if st.button("🏠 Go to Top"):
+        st.rerun()
+with col2:
+    if "show_posters" not in st.session_state:
+        st.session_state["show_posters"] = True
+    if st.button("🖼️ Toggle Posters"):
+        st.session_state["show_posters"] = not st.session_state["show_posters"]
 
-ensure_favorites_structure()
+show_posters = st.session_state["show_posters"]
+media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
 
-# Firebase'den çek + favorites_updated.json oluştur + GitHub'a push et
-def sync_favorites_to_github():
-    try:
-        with open("favorites.json", "r") as f:
-            favorites = json.load(f)
+if "query" not in st.session_state:
+    st.session_state.query = ""
 
-        with open("favorites_updated.json", "w") as fw:
-            json.dump(favorites, fw, indent=2)
-
-        num_movies = len(favorites.get("movies", []))
-        num_series = len(favorites.get("shows", []))
-
-        if not GITHUB_TOKEN:
-            st.warning("⚠️ GitHub token bulunamadı.")
-            return
-
-        g = Github(GITHUB_TOKEN)
-        repo = g.get_repo(REPO_NAME)
-        contents = repo.get_contents(TARGET_FILE)
-
-        with open("favorites_updated.json", "r") as fup:
-            updated_content = fup.read()
-
-        repo.update_file(contents.path, "Update favorites.json from app.py", updated_content, contents.sha)
-        st.success(f"✅ GitHub güncellendi — 🎬 {num_movies} movie, 📺 {num_series} series")
-    except Exception as e:
-        st.error(f"🚨 Hata oluştu: {e}")
-
-# Arama bölümü
-media_type = st.radio("What would you like to search for?", ["Movie", "TV Show"], horizontal=True)
-query = st.text_input(f"🔍 Search for a {media_type.lower()}")
+query = st.text_input(f"🔍 Search for a {media_type.lower()}", value=st.session_state.query, key="query_input")
 if query:
-    results = search_movie(query) if media_type == "Movie" else search_tv(query)
-    for idx, item in enumerate(results):
-        if item["poster"]:
-            st.image(item["poster"])
-        else:
-            st.warning("No poster available.")
-        st.markdown(f"**{item['title']} ({item['year']})**")
-        st.markdown(f"⭐ IMDb: {item['imdb']} &nbsp;&nbsp; 🍅 RT: {item['rt']}%")
+    st.session_state.query = query
+    if media_type == "Movie":
+        results = search_movie(query)
+    elif media_type == "TV Show":
+        results = search_tv(query)
+    else:
+        results = search_by_actor(query)
 
-        stars = st.slider("🎯 CineSelect Rating", 1, 5, 3, key=f"stars_{idx}")
-        if st.button("Add to Favorites", key=f"btn_{idx}"):
-            key = "movie" if media_type == "Movie" else "show"
-            add_to_favorites(item, stars, key)
-            st.success(f"✅ {item['title']} added to your favorites!")
-            sync_favorites_to_github()  # 🎯 Otomatik güncelleme burada
+    try:
+        results = sorted(results, key=lambda x: x.get("cineselectRating", 0), reverse=True)
+    except:
+        pass
 
-# Favori gösterimi
-st.markdown("---")
+    if not results:
+        st.error("❌ No results found.")
+    else:
+        for idx, item in enumerate(results):
+            st.divider()
+            if item["poster"] and show_posters:
+                st.image(item["poster"], width=180)
+            st.markdown(f"**{idx+1}. {item['title']} ({item['year']})**")
+            imdb_display = f"{item['imdb']:.1f}" if isinstance(item['imdb'], (int, float)) and item['imdb'] > 0 else "N/A"
+            rt_display = f"{item['rt']}%" if isinstance(item['rt'], (int, float)) and item['rt'] > 0 else "N/A"
+            st.markdown(f"⭐ IMDb: {imdb_display} &nbsp;&nbsp; 🍅 RT: {rt_display}", unsafe_allow_html=True)
+
+            slider_key = f"stars_{item['id']}"
+            manual_key = f"manual_{item['id']}"
+            slider_val = st.slider("🎯 CineSelect Rating:", 1, 10000, st.session_state.get(slider_key, 5000), step=10, key=slider_key)
+            manual_val = st.number_input("Manual value:", min_value=1, max_value=10000, value=slider_val, step=1, key=manual_key)
+
+            if st.button("Add to Favorites", key=f"btn_{item['id']}"):
+                media_key = "movie" if media_type == "Movie" else ("show" if media_type == "TV Show" else "movie")
+                db.collection("favorites").document(item["id"]).set({
+                    "id": item["id"],
+                    "title": item["title"],
+                    "year": item["year"],
+                    "imdb": item["imdb"],
+                    "poster": item["poster"],
+                    "rt": item["rt"],
+                    "cineselectRating": manual_val,
+                    "type": media_key
+                })
+                st.success(f"✅ {item['title']} added to favorites!")
+                st.session_state.query = ""
+                st.rerun()
+
+st.divider()
 st.subheader("❤️ Your Favorites")
+sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], index=2)
+
+def get_sort_key(fav):
+    try:
+        if sort_option == "IMDb":
+            return float(fav.get("imdb", 0))
+        elif sort_option == "RT":
+            return float(fav.get("rt", 0))
+        elif sort_option == "CineSelect":
+            return fav.get("cineselectRating", 0)
+        elif sort_option == "Year":
+            return int(fav.get("year", 0))
+    except:
+        return 0
 
 def show_favorites(fav_type, label):
-    if os.path.exists("favorites.json"):
-        with open("favorites.json", "r") as f:
-            data = json.load(f)
-        favs = data.get(fav_type, [])
-        if favs:
-            st.markdown(f"### 📁 {label}")
-            for fav in favs:
-                if fav.get("poster"):
-                    st.image(fav["poster"], width=150)
-                else:
-                    st.warning("No poster available.")
-                st.markdown(f"**{fav['title']} ({fav['year']})**")
-                st.markdown(f"⭐ IMDb: {fav['imdb']} &nbsp;&nbsp; 🍅 RT: {fav['rt']}%")
-                st.markdown(f"🎯 CineSelect Rating: {fav.get('cineselectRating', 'N/A')}")
-                st.markdown("---")
-        else:
-            st.info(f"No {label.lower()} favorites yet.")
-    else:
-        st.info("No favorites file found.")
+    docs = db.collection("favorites").where("type", "==", fav_type).stream()
+    favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
 
-show_favorites("movies", "Favorite Movies")
-show_favorites("shows", "Favorite TV Shows")
+    st.markdown(f"### 📁 {label}")
+    for idx, fav in enumerate(favorites):
+        imdb_display = f"{fav['imdb']:.1f}" if isinstance(fav["imdb"], (int, float)) else "N/A"
+        rt_display = f"{fav['rt']}%" if isinstance(fav["rt"], (int, float)) else "N/A"
+        cols = st.columns([1, 5, 1, 1])
+        with cols[0]:
+            if show_posters and fav.get("poster"):
+                st.image(fav["poster"], width=120)
+        with cols[1]:
+            st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
+        with cols[2]:
+            if st.button("❌", key=f"remove_{fav['id']}"):
+                db.collection("favorites").document(fav["id"]).delete()
+                st.rerun()
+        with cols[3]:
+            if st.button("✏️", key=f"edit_{fav['id']}"):
+                st.session_state[f"edit_mode_{fav['id']}"] = True
 
-# Footer
+        if st.session_state.get(f"edit_mode_{fav['id']}", False):
+            new_val = st.slider("🎯 CS:", 1, 10000, fav.get("cineselectRating", 5000), step=10, key=f"slider_{fav['id']}")
+            if st.button("✅ Save", key=f"save_{fav['id']}"):
+                db.collection("favorites").document(fav["id"]).update({"cineselectRating": new_val})
+                st.success(f"✅ Updated {fav['title']}'s rating.")
+                st.session_state[f"edit_mode_{fav['id']}"] = False
+                st.rerun()
+
+if media_type == "Movie":
+    show_favorites("movie", "Favorite Movies")
+elif media_type == "TV Show":
+    show_favorites("show", "Favorite TV Shows")
+
 st.markdown("---")
+if st.button("🔝 Go to Top Again"):
+    st.rerun()
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
-
-# 👇 GitHub'a manuel senkronizasyon butonu
-st.markdown("## ")
-if st.button("🔄 Senkronize Et (GitHub'a Push Et)"):
-    try:
-        # fetch_and_push_auto.py içeriği doğrudan burada çalıştırılıyor
-        import json
-        import os
-        from github import Github
-        
-        # --- GitHub Ayarları ---
-        GITHUB_TOKEN = "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"
-        REPO_NAME = "serkansu/cineselect-addon"
-        FILE_PATH = "favorites.json"
-        LOCAL_FILE = "favorites_updated.json"
-        COMMIT_MESSAGE = "🆕 Auto-update favorites.json (via script)"
-        
-        # --- GitHub bağlantısı kur ---
-        g = Github(GITHUB_TOKEN)
-        repo = g.get_repo(REPO_NAME)
-        
-        try:
-            # Yerel dosyayı oku
-            with open(LOCAL_FILE, "r", encoding="utf-8") as f:
-                content = f.read()
-        
-            # Uzak dosyanın mevcut içeriğini al
-            contents = repo.get_contents(FILE_PATH)
-        
-            # GitHub dosyasını güncelle
-            repo.update_file(
-                path=contents.path,
-                message=COMMIT_MESSAGE,
-                content=content,
-                sha=contents.sha
-            )
-        
-            print("✅ GitHub'daki favorites.json başarıyla güncellendi.")
-        
-        except Exception as e:
-            print(f"🚨 GitHub güncellemesinde hata oluştu: {e}")
-        st.success("🎉 GitHub senkronizasyonu başarıyla tamamlandı.")
-    except Exception as e:
-        st.error(f"❌ Senkronizasyon sırasında hata oluştu: {e}")
