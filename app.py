@@ -1,7 +1,16 @@
 import streamlit as st
 from firebase_setup import get_firestore
 from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
+import json
 
+def sync_with_firebase():
+    favorites_data = {
+        "movies": st.session_state.get("favorite_movies", []),
+        "shows": st.session_state.get("favorite_series", [])
+    }
+    with open("favorites.json", "w", encoding="utf-8") as f:
+        json.dump(favorites_data, f, ensure_ascii=False, indent=4)
+    st.success("✅ favorites.json dosyası senkronize edildi.")
 db = get_firestore()
 
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
@@ -18,7 +27,9 @@ with col2:
         st.session_state["show_posters"] = True
     if st.button("🖼️ Toggle Posters"):
         st.session_state["show_posters"] = not st.session_state["show_posters"]
+    if st.button("🔄 Senkronize Et (Firebase JSON)"):
 
+        sync_with_firebase()    
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
 
