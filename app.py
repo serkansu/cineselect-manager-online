@@ -1,117 +1,112 @@
-import streamlit as st
-import json
-import requests
+# Kusursuz app.py + fetch_and_push_auto.py entegrasyonu
 import os
-from firebase_admin import credentials, firestore, initialize_app
-import subprocess
+import json
+import streamlit as st
+from tmdb import search_movie, search_tv, add_to_favorites
+from github import Github
+from dotenv import load_dotenv
 
-# Firebase bağlantısı
-@st.cache_resource
-def get_firestore():
-    if not firestore._apps:
-        cred = credentials.Certificate({
-            "type": "service_account",
-            "project_id": "cineselect",
-            "private_key_id": os.getenv("PRIVATE_KEY_ID"),
-            "private_key": os.getenv("PRIVATE_KEY").replace("\\n", "\n"),
-            "client_email": os.getenv("CLIENT_EMAIL"),
-            "client_id": os.getenv("CLIENT_ID"),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": os.getenv("CLIENT_CERT_URL")
-        })
-        initialize_app(cred)
-    return firestore.client()
+# GitHub ayarları
+load_dotenv()
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", None)
+REPO_NAME = "serkansu/cineselect-addon"
+TARGET_FILE = "favorites.json"
 
-db = get_firestore()
-
-# TMDB API
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-TMDB_SEARCH_MOVIE = "https://api.themoviedb.org/3/search/movie"
-TMDB_SEARCH_TV = "https://api.themoviedb.org/3/search/tv"
-TMDB_EXTERNAL_IDS = "https://api.themoviedb.org/3/{type}/{id}/external_ids"
-
-def search_tmdb(title, content_type):
-    params = {
-        "api_key": TMDB_API_KEY,
-        "query": title,
-        "include_adult": False
-    }
-    url = TMDB_SEARCH_MOVIE if content_type == "movie" else TMDB_SEARCH_TV
-    response = requests.get(url, params=params)
-    if response.status_code == 200 and response.json()["results"]:
-        return response.json()["results"][0]
-    return None
-
-def get_imdb_id(type_, tmdb_id):
-    url = TMDB_EXTERNAL_IDS.format(type=type_, id=tmdb_id)
-    response = requests.get(url, params={"api_key": TMDB_API_KEY})
-    if response.status_code == 200:
-        return response.json().get("imdb_id", "")
-    return ""
-
-# Streamlit UI
-st.set_page_config(layout="wide")
+# Sayfa yapılandırması
+st.set_page_config(page_title="CineSelect Manager", layout="centered")
 st.title("🎬 CineSelect Manager")
 
-selection = st.radio("Seçim", ["Favoriler", "İstek Listesi"])
-col1, col2 = st.columns([3, 1])
+# --- favorites.json eski format ise dönüştür ---
+def ensure_favorites_structure():
+    if os.path.exists("favorites.json"):
+        with open("favorites.json", "r") as f:
+            try:
+                data = json.load(f)
+                if isinstance(data, list):  # eski format
+                    new_data = {"movies": data, "shows": []}
+                    with open("favorites.json", "w") as fw:
+                        json.dump(new_data, fw, indent=2)
+            except:
+                pass
 
-with col1:
-    title = st.text_input("Film/Dizi Adı")
-    content_type = st.selectbox("Tür", ["movie", "series"])
+ensure_favorites_structure()
 
-with col2:
-    if st.button("🎯 Ekle ve Güncelle"):
-        collection = "favorites" if selection == "Favoriler" else "watchlist"
-        ref = db.collection(collection)
-        docs = ref.stream()
-        existing_titles = [doc.to_dict().get("title", "").lower() for doc in docs]
-
-        if title.lower() not in existing_titles:
-            result = search_tmdb(title, "movie" if content_type == "movie" else "tv")
-            if result:
-                imdb = get_imdb_id("movie" if content_type == "movie" else "tv", result["id"])
-                ref.add({
-                    "title": result["title"] if content_type == "movie" else result["name"],
-                    "poster": f"https://image.tmdb.org/t/p/w500{result['poster_path']}" if result.get("poster_path") else "",
-                    "imdb": imdb,
-                    "type": content_type
-                })
-                st.success(f"✅ {title} başarıyla eklendi.")
-            else:
-                st.error("❌ TMDB'de sonuç bulunamadı.")
-        else:
-            st.info("ℹ️ Bu içerik zaten eklenmişti.")
-
-        # Güncelleme betiğini çalıştır
-        try:
-            result = subprocess.run(["python3", "fetch_and_push_auto.py"], capture_output=True, text=True)
-            output_lines = result.stdout.splitlines()
-            for line in output_lines:
-                st.info(line)
-        except Exception as e:
-            st.error(f"fetch_and_push_auto.py çalıştırılamadı: {e}")
-
-# Favori ve istek listesi görüntüleme
-def load_list(name):
+# Firebase'den çek + favorites_updated.json oluştur + GitHub'a push et
+def sync_favorites_to_github():
     try:
-        with open("favorites_updated.json") as f:
-            return json.load(f).get(name, [])
-    except:
-        return []
+        with open("favorites.json", "r") as f:
+            favorites = json.load(f)
 
-with st.expander("🎬 Favori Filmler"):
-    for item in load_list("movies"):
-        st.markdown(f"**{item['title']}** — {item.get('imdb', '')}")
+        with open("favorites_updated.json", "w") as fw:
+            json.dump(favorites, fw, indent=2)
 
-with st.expander("📺 Favori Diziler"):
-    for item in load_list("series"):
-        st.markdown(f"**{item['title']}** — {item.get('imdb', '')}")
+        num_movies = len(favorites.get("movies", []))
+        num_series = len(favorites.get("shows", []))
 
-with st.expander("📌 Watch List"):
-    watchlist = db.collection("watchlist").stream()
-    for doc in watchlist:
-        item = doc.to_dict()
-        st.markdown(f"**{item['title']}** — {item.get('imdb', '')}")
+        if not GITHUB_TOKEN:
+            st.warning("⚠️ GitHub token bulunamadı.")
+            return
+
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(REPO_NAME)
+        contents = repo.get_contents(TARGET_FILE)
+
+        with open("favorites_updated.json", "r") as fup:
+            updated_content = fup.read()
+
+        repo.update_file(contents.path, "Update favorites.json from app.py", updated_content, contents.sha)
+        st.success(f"✅ GitHub güncellendi — 🎬 {num_movies} movie, 📺 {num_series} series")
+    except Exception as e:
+        st.error(f"🚨 Hata oluştu: {e}")
+
+# Arama bölümü
+media_type = st.radio("What would you like to search for?", ["Movie", "TV Show"], horizontal=True)
+query = st.text_input(f"🔍 Search for a {media_type.lower()}")
+if query:
+    results = search_movie(query) if media_type == "Movie" else search_tv(query)
+    for idx, item in enumerate(results):
+        if item["poster"]:
+            st.image(item["poster"])
+        else:
+            st.warning("No poster available.")
+        st.markdown(f"**{item['title']} ({item['year']})**")
+        st.markdown(f"⭐ IMDb: {item['imdb']} &nbsp;&nbsp; 🍅 RT: {item['rt']}%")
+
+        stars = st.slider("🎯 CineSelect Rating", 1, 5, 3, key=f"stars_{idx}")
+        if st.button("Add to Favorites", key=f"btn_{idx}"):
+            key = "movie" if media_type == "Movie" else "show"
+            add_to_favorites(item, stars, key)
+            st.success(f"✅ {item['title']} added to your favorites!")
+            sync_favorites_to_github()  # 🎯 Otomatik güncelleme burada
+
+# Favori gösterimi
+st.markdown("---")
+st.subheader("❤️ Your Favorites")
+
+def show_favorites(fav_type, label):
+    if os.path.exists("favorites.json"):
+        with open("favorites.json", "r") as f:
+            data = json.load(f)
+        favs = data.get(fav_type, [])
+        if favs:
+            st.markdown(f"### 📁 {label}")
+            for fav in favs:
+                if fav.get("poster"):
+                    st.image(fav["poster"], width=150)
+                else:
+                    st.warning("No poster available.")
+                st.markdown(f"**{fav['title']} ({fav['year']})**")
+                st.markdown(f"⭐ IMDb: {fav['imdb']} &nbsp;&nbsp; 🍅 RT: {fav['rt']}%")
+                st.markdown(f"🎯 CineSelect Rating: {fav.get('cineselectRating', 'N/A')}")
+                st.markdown("---")
+        else:
+            st.info(f"No {label.lower()} favorites yet.")
+    else:
+        st.info("No favorites file found.")
+
+show_favorites("movies", "Favorite Movies")
+show_favorites("shows", "Favorite TV Shows")
+
+# Footer
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
