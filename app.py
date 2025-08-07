@@ -1,6 +1,6 @@
 import streamlit as st
-from firebase_setup import get_firestore
-from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
+    from firebase_setup import get_firestore
+    from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
 
     db = get_firestore()
 
