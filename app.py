@@ -112,7 +112,7 @@ def sync_with_firebase():
             if t in ["tv", "tvshow", "show", "series"]:
                 item["type"] = "series"
             elif t in ["movie", "film"]:
-            item["type"] = "movie"
+                item["type"] = "movie"
 # IMDb ID eksikse ➜ tamamlama başlıyor
         # Eksik imdb id'leri tamamla
     for section in ["movies", "shows"]:
