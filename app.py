@@ -89,13 +89,19 @@ import streamlit as st
 from firebase_setup import get_firestore
 from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
 import json
-
+def fix_invalid_imdb_ids(data):
+    for section in ["movies", "shows"]:
+        for item in data[section]:
+            if isinstance(item.get("imdb"), (int, float)):
+                item["imdb"] = ""
 
 def sync_with_firebase():
     favorites_data = {
         "movies": st.session_state.get("favorite_movies", []),
         "shows": st.session_state.get("favorite_series", [])
     }
+    fix_invalid_imdb_ids(favorites_data)  # IMDb puanı olanları temizle
+# IMDb ID eksikse ➜ tamamlama başlıyor
         # Eksik imdb id'leri tamamla
     for section in ["movies", "shows"]:
         for item in favorites_data[section]:
@@ -106,7 +112,7 @@ def sync_with_firebase():
                 section_name = section.lower()
 
                 is_series_by_section = section_name in ["shows", "series"]
-                is_series_by_type = raw_type in ["series", "tv", "tv_show", "tvshow"]
+                is_series_by_type = raw_type in ["series", "tv", "tv_show", "tvshow", "show"]
 
                 is_series = is_series_by_section or is_series_by_type
                 item["type"] = "series" if is_series else "movie"
