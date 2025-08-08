@@ -130,6 +130,7 @@ def sync_with_firebase():
                 print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
                 item["imdb"] = imdb_id
     # Dizilerin type'ını 'show' olarak normalize et
+    all_favorites = favorites_data if isinstance(favorites_data, list) else []
     for item in all_favorites:
         if item.get("type") == "series":
             item["type"] = "show"
