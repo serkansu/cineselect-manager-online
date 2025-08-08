@@ -99,16 +99,17 @@ def sync_with_firebase():
         # Eksik imdb id'leri tamamla
     for section in ["movies", "shows"]:
         for item in favorites_data[section]:
-            if not item.get("imdb"):
+            if not item.get("imdb") or item.get("imdb") == "":
                 title = item.get("title")
                 year = item.get("year")
                 raw_type = item.get("type", "").lower()
-                if not raw_type:
-                    section_name = section.lower()
-                    is_series = section_name in ["shows", "series"]
-                else:
-                    is_series = raw_type in ["series", "tv", "tv_show", "tvshow"]
-                item["type"] = "series" if is_series else "movie"
+section_name = section.lower()
+
+is_series_by_section = section_name in ["shows", "series"]
+is_series_by_type = raw_type in ["series", "tv", "tv_show", "tvshow"]
+
+is_series = is_series_by_section or is_series_by_type
+item["type"] = "series" if is_series else "movie"
                 imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
                 print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
                 item["imdb"] = imdb_id
