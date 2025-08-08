@@ -146,7 +146,7 @@ with open("favorites.json", "w", encoding="utf-8") as f:
 st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
 
     # GitHub'a push et
-    push_favorites_to_github()
+push_favorites_to_github()
 
 db = get_firestore()
 # Firestore'dan verileri çek ve session'a yaz
@@ -306,4 +306,13 @@ st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p
 import os
 import base64
 import requests
+import subprocess
 
+def push_favorites_to_github():
+    try:
+        subprocess.run(["git", "add", "favorites.json"], check=True)
+        subprocess.run(["git", "commit", "-m", "update favorites.json"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        print("✅ GitHub'a başarıyla push edildi.")
+    except subprocess.CalledProcessError as e:
+        print("❌ Git işlemi başarısız:", e)
