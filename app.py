@@ -17,7 +17,6 @@ def sync_with_firebase():
     push_favorites_to_github()
 
 db = get_firestore()
- get_firestore()
 
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
 st.markdown("""
