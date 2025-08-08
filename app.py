@@ -1,5 +1,9 @@
 import streamlit as st
 import requests
+from flask import Flask, jsonify
+import firebase_admin
+from firebase_admin import credentials, firestore
+import json
 def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     tmdb_api_key = os.getenv("TMDB_API_KEY")
     if not tmdb_api_key:
@@ -33,7 +37,7 @@ def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     return imdb_id or ""
 import os
 import base64
-
+app = Flask(__name__)
 def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
@@ -105,10 +109,10 @@ def sync_with_firebase():
     for section in ["movies", "shows"]:
         for item in favorites_data[section]:
             t = item.get("type", "").lower()
-            if t in ["show", "tv", "tvshow"]:
+            if t in ["tv", "tvshow", "show", "series"]:
                 item["type"] = "series"
             elif t in ["movie", "film"]:
-                item["type"] = "movie"
+            item["type"] = "movie"
 # IMDb ID eksikse ➜ tamamlama başlıyor
         # Eksik imdb id'leri tamamla
     for section in ["movies", "shows"]:
@@ -343,3 +347,28 @@ def push_favorites_to_github():
             st.code(put_response.json())
         except:
             st.write("Yanıt alınamadı.")
+@app.route("/catalog")
+def catalog():
+    catalog_items = []
+
+    for fav_type in ["movie", "series"]:
+        docs = db.collection("favorites").where("type", "==", fav_type).stream()
+        favorites = sorted(
+            [doc.to_dict() for doc in docs],
+            key=get_sort_key,
+            reverse=True
+        )
+
+        for item in favorites:
+            catalog_items.append({
+                "id": item.get("id"),
+                "title": item.get("title"),
+                "year": item.get("year"),
+                "imdb": item.get("imdb"),
+                "rt": item.get("rt"),
+                "poster": item.get("poster"),
+                "type": item.get("type"),
+                "cineselectRating": item.get("cineselectRating", 0)
+            })
+
+    return jsonify(catalog_items)
