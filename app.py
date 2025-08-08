@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-from flask import Flask, jsonify
 import firebase_admin
 from firebase_admin import credentials, firestore
 import json
@@ -36,8 +35,7 @@ def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     imdb_id = external_response.json().get("imdb_id", "")
     return imdb_id or ""
 import os
-import base64
-app = Flask(__name__)
+import base
 def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
@@ -298,77 +296,4 @@ import os
 import base64
 import requests
 
-def push_favorites_to_github():
-    github_token = os.getenv("GITHUB_TOKEN")
-    if not github_token:
-        st.error("❌ GitHub token bulunamadı. Environment variable ayarlanmalı.")
-        return
 
-    repo_owner = "serkansu"
-    repo_name = "cineselect-addon"
-    file_path = "favorites.json"
-    commit_message = "Update favorites.json via Streamlit sync"
-
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
-    headers = {
-        "Authorization": f"token {github_token}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-
-    # Dosya içeriğini oku ve base64 encode et
-    with open("favorites.json", "rb") as f:
-        content = f.read()
-    encoded_content = base64.b64encode(content).decode("utf-8")
-
-    # Mevcut dosya bilgisi (SHA) alınmalı
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        sha = response.json()["sha"]
-    elif response.status_code == 404:
-        sha = None
-    else:
-        st.error(f"❌ GitHub API erişim hatası: {response.status_code}")
-        return
-
-    payload = {
-        "message": commit_message,
-        "content": encoded_content,
-        "branch": "main"
-    }
-    if sha:
-        payload["sha"] = sha
-
-    put_response = requests.put(url, headers=headers, json=payload)
-    if put_response.status_code in [200, 201]:
-        st.success("✅ GitHub'a başarılı şekilde push edildi.")
-    else:
-        st.error(f"❌ Push başarısız: {put_response.status_code}")
-        try:
-            st.code(put_response.json())
-        except:
-            st.write("Yanıt alınamadı.")
-@app.route("/catalog")
-def catalog():
-    catalog_items = []
-
-    for fav_type in ["movie", "series"]:
-        docs = db.collection("favorites").where("type", "==", fav_type).stream()
-        favorites = sorted(
-            [doc.to_dict() for doc in docs],
-            key=get_sort_key,
-            reverse=True
-        )
-
-        for item in favorites:
-            catalog_items.append({
-                "id": item.get("id"),
-                "title": item.get("title"),
-                "year": item.get("year"),
-                "imdb": item.get("imdb"),
-                "rt": item.get("rt"),
-                "poster": item.get("poster"),
-                "type": item.get("type"),
-                "cineselectRating": item.get("cineselectRating", 0)
-            })
-
-    return jsonify(catalog_items)
