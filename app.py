@@ -1,6 +1,7 @@
+import streamlit as st
+import requests
 import os
 import base64
-import requests
 
 def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
@@ -92,6 +93,14 @@ with col2:
         sync_with_firebase()
         st.success("✅ favorites.json dosyası senkronize edildi.")
 
+def show_favorites_count():
+    movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
+    series_docs = db.collection("favorites").where("type", "==", "show").stream()
+
+    movie_count = len(list(movie_docs))
+    series_count = len(list(series_docs))
+
+    st.info(f"🎬 Favorite Movies: {movie_count} | 📺 Favorite TV Shows: {series_count}")
     if st.button("📊 Favori Sayılarını Göster"):
         show_favorites_count()
 
