@@ -74,7 +74,12 @@ def sync_with_firebase():
     push_favorites_to_github()
 
 db = get_firestore()
+# Firestore'dan verileri çek ve session'a yaz
+movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
+series_docs = db.collection("favorites").where("type", "==", "show").stream()
 
+st.session_state["favorite_movies"] = [doc.to_dict() for doc in movie_docs]
+st.session_state["favorite_series"] = [doc.to_dict() for doc in series_docs]
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
 st.markdown("""
     <h1 style='text-align:center;'>🍿 <b>Serkan's Watchagain Movies & Series <span style="color:#2ecc71;">ONLINE ✅</span></b></h1>
