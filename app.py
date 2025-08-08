@@ -139,7 +139,7 @@ for section in ["movies", "shows"]:
             item["type"] = "show"
         updated_section.append(item)
     favorites_data[section] = updated_section  # 🔴 MUTLAKA GÜNCELLE
-    DEBUG satırı
+      # DEBUG satırı
     with open("favorites.json", "w", encoding="utf-8") as f:
         st.write("✅ FINAL FAVORITES:", favorites_data)
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
