@@ -3,6 +3,7 @@ import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
 import json
+import base64
 def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     tmdb_api_key = os.getenv("TMDB_API_KEY")
     if not tmdb_api_key:
