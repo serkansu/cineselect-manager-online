@@ -35,7 +35,6 @@ def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     imdb_id = external_response.json().get("imdb_id", "")
     return imdb_id or ""
 import os
-import base
 def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
