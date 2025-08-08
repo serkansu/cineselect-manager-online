@@ -130,12 +130,18 @@ def sync_with_firebase():
                 print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
                 item["imdb"] = imdb_id
     # Dizilerin type'ını 'show' olarak normalize et
-    all_favorites = favorites_data if isinstance(favorites_data, list) else []
-    for item in all_favorites:
-        if "series" in str(item.get("type", "")).lower():
+# Dizilerin type'ını 'show' olarak normalize et
+# Dizilerin type'ını 'show' olarak normalize et
+for section in ["movies", "shows"]:
+    updated_section = []
+    for item in favorites_data.get(section, []):
+        if str(item.get("type", "")).lower() == "series":
             item["type"] = "show"
-            st.write("✅ FINAL FAVORITES:", favorites_data)  # DEBUG satırı
+        updated_section.append(item)
+    favorites_data[section] = updated_section  # 🔴 MUTLAKA GÜNCELLE
+    DEBUG satırı
     with open("favorites.json", "w", encoding="utf-8") as f:
+        st.write("✅ FINAL FAVORITES:", favorites_data)
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
         st.write("🔍 FAVORITES DEBUG:", favorites_data)  # DEBUG SATIRI
     st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
