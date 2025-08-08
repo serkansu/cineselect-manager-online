@@ -129,6 +129,10 @@ def sync_with_firebase():
                 imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
                 print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
                 item["imdb"] = imdb_id
+    # Dizilerin type'ını 'show' olarak normalize et
+    for item in all_favorites:
+        if item.get("type") == "series":
+            item["type"] = "show"
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
         st.write("🔍 FAVORITES DEBUG:", favorites_data)  # DEBUG SATIRI
@@ -295,5 +299,3 @@ st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p
 import os
 import base64
 import requests
-
-
