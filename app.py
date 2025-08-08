@@ -102,8 +102,10 @@ def sync_with_firebase():
             if not item.get("imdb"):
                 title = item.get("title")
                 year = item.get("year")
-                is_series = section == "shows"
-                imdb_id = get_imdb_id_from_tmdb(title, year, is_series)
+                raw_type = item.get("type", "").lower()
+                is_series = raw_type in ["series", "tv", "tv_show", "tvshow"]
+                imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
+                print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
                 item["imdb"] = imdb_id
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
