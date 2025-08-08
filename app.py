@@ -3,6 +3,7 @@ from firebase_setup import get_firestore
 from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
 import json
 
+
 def sync_with_firebase():
     favorites_data = {
         "movies": st.session_state.get("favorite_movies", []),
@@ -10,16 +11,13 @@ def sync_with_firebase():
     }
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-    st.success("✅ favorites.json dosyası senkronize edildi.")
+    st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
 
-def show_favorites_count():
-    movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
-    show_docs = db.collection("favorites").where("type", "==", "show").stream()
-    movie_count = sum(1 for _ in movie_docs)
-    show_count = sum(1 for _ in show_docs)
-    st.success(f"🎬 Filmler: {movie_count} adet | 📺 Diziler: {show_count} adet")
+    # GitHub'a push et
+    push_favorites_to_github()
 
 db = get_firestore()
+ get_firestore()
 
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
 st.markdown("""
@@ -158,3 +156,59 @@ if st.button("🔝 Go to Top Again"):
     st.rerun()
 
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
+
+
+
+import os
+import base64
+import requests
+
+def push_favorites_to_github():
+    github_token = os.getenv("GITHUB_TOKEN")
+    if not github_token:
+        st.error("❌ GitHub token bulunamadı. Environment variable ayarlanmalı.")
+        return
+
+    repo_owner = "serkansu"
+    repo_name = "cineselect-addon"
+    file_path = "favorites.json"
+    commit_message = "Update favorites.json via Streamlit sync"
+
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    # Dosya içeriğini oku ve base64 encode et
+    with open("favorites.json", "rb") as f:
+        content = f.read()
+    encoded_content = base64.b64encode(content).decode("utf-8")
+
+    # Mevcut dosya bilgisi (SHA) alınmalı
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        sha = response.json()["sha"]
+    elif response.status_code == 404:
+        sha = None
+    else:
+        st.error(f"❌ GitHub API erişim hatası: {response.status_code}")
+        return
+
+    payload = {
+        "message": commit_message,
+        "content": encoded_content,
+        "branch": "main"
+    }
+    if sha:
+        payload["sha"] = sha
+
+    put_response = requests.put(url, headers=headers, json=payload)
+    if put_response.status_code in [200, 201]:
+        st.success("✅ GitHub'a başarılı şekilde push edildi.")
+    else:
+        st.error(f"❌ Push başarısız: {put_response.status_code}")
+        try:
+            st.code(put_response.json())
+        except:
+            st.write("Yanıt alınamadı.")
