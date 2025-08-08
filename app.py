@@ -65,6 +65,15 @@ def sync_with_firebase():
         "movies": st.session_state.get("favorite_movies", []),
         "shows": st.session_state.get("favorite_series", [])
     }
+        # Eksik imdb id'leri tamamla
+    for section in ["movies", "shows"]:
+        for item in favorites_data[section]:
+            if not item.get("imdb"):
+                title = item.get("title")
+                year = item.get("year")
+                is_series = section == "shows"
+                imdb_id = get_imdb_id_from_tmdb(title, year, is_series)
+                item["imdb"] = imdb_id
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
         st.write("🔍 FAVORITES DEBUG:", favorites_data)  # DEBUG SATIRI
@@ -172,6 +181,38 @@ st.divider()
 st.subheader("❤️ Your Favorites")
 sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], index=2)
 
+def get_imdb_id_from_tmdb(title, year=None, is_series=False):
+    tmdb_api_key = os.getenv("TMDB_API_KEY")
+    if not tmdb_api_key:
+        print("❌ TMDB API key not found in environment variables.")
+        return ""
+
+    search_type = "tv" if is_series else "movie"
+    search_url = f"https://api.themoviedb.org/3/search/{search_type}"
+    params = {
+        "api_key": tmdb_api_key,
+        "query": title,
+        "year": year if not is_series else None,
+        "first_air_date_year": year if is_series else None,
+    }
+
+    response = requests.get(search_url, params=params)
+    if response.status_code != 200:
+        return ""
+
+    results = response.json().get("results", [])
+    if not results:
+        return ""
+
+    tmdb_id = results[0]["id"]
+    external_ids_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/external_ids"
+    external_response = requests.get(external_ids_url, params={"api_key": tmdb_api_key})
+    if external_response.status_code != 200:
+        return ""
+
+    imdb_id = external_response.json().get("imdb_id", "")
+    return imdb_id or ""
+    
 def get_sort_key(fav):
     try:
         if sort_option == "IMDb":
@@ -281,3 +322,4 @@ def push_favorites_to_github():
             st.code(put_response.json())
         except:
             st.write("Yanıt alınamadı.")
+
