@@ -110,8 +110,8 @@ is_series_by_type = raw_type in ["series", "tv", "tv_show", "tvshow"]
 
 is_series = is_series_by_section or is_series_by_type
 item["type"] = "series" if is_series else "movie"
-                imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
-                print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
+imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
+print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
                 item["imdb"] = imdb_id
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
