@@ -132,8 +132,9 @@ def sync_with_firebase():
     # Dizilerin type'ını 'show' olarak normalize et
     all_favorites = favorites_data if isinstance(favorites_data, list) else []
     for item in all_favorites:
-        if item.get("type") == "series":
+        if "series" in str(item.get("type", "")).lower():
             item["type"] = "show"
+            st.write("✅ FINAL FAVORITES:", favorites_data)  # DEBUG satırı
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
         st.write("🔍 FAVORITES DEBUG:", favorites_data)  # DEBUG SATIRI
