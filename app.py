@@ -129,7 +129,7 @@ def sync_with_firebase():
                 imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
                 print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
 favorites_data = {"movies": [], "shows": []}
-                item["imdb"] = imdb_id
+item["imdb"] = imdb_id
 # Dizilerin type'ını 'show' olarak normalize et
 for section in ["movies", "shows"]:
     updated_section = []
