@@ -142,7 +142,12 @@ for section in ["movies", "shows"]:
         item["imdb"] = imdb_id
         updated_section.append(item)
     favorites_data[section] = updated_section
+db = get_firestore()
 
+favorites_data = {
+    "movies": [doc.to_dict() for doc in db.collection("favorites").where("type", "==", "movie").stream()],
+    "shows": [doc.to_dict() for doc in db.collection("favorites").where("type", "==", "show").stream()]
+}
 # DEBUG satırı (isteğe bağlı)
 with open("favorites.json", "w", encoding="utf-8") as f:
     st.write("✅ FINAL FAVORITES:", favorites_data)
