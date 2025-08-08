@@ -101,6 +101,14 @@ def sync_with_firebase():
         "shows": st.session_state.get("favorite_series", [])
     }
     fix_invalid_imdb_ids(favorites_data)  # IMDb puanı olanları temizle
+        # IMDb düzeltmesinden sonra type alanını normalize et
+    for section in ["movies", "shows"]:
+        for item in favorites_data[section]:
+            t = item.get("type", "").lower()
+            if t in ["show", "tv", "tvshow"]:
+                item["type"] = "series"
+            elif t in ["movie", "film"]:
+                item["type"] = "movie"
 # IMDb ID eksikse ➜ tamamlama başlıyor
         # Eksik imdb id'leri tamamla
     for section in ["movies", "shows"]:
@@ -335,4 +343,3 @@ def push_favorites_to_github():
             st.code(put_response.json())
         except:
             st.write("Yanıt alınamadı.")
-
