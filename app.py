@@ -129,22 +129,21 @@ def sync_with_firebase():
                 imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
                 print(f"🎬 {title} ({year}) | is_series={is_series} → IMDb ID: {imdb_id}")
                 item["imdb"] = imdb_id
-    # Dizilerin type'ını 'show' olarak normalize et
-# Dizilerin type'ını 'show' olarak normalize et
 # Dizilerin type'ını 'show' olarak normalize et
 for section in ["movies", "shows"]:
     updated_section = []
     for item in favorites_data.get(section, []):
-        if str(item.get("type", "")).lower() == "series":
+        if "series" in str(item.get("type", "")).lower():
             item["type"] = "show"
         updated_section.append(item)
-    favorites_data[section] = updated_section  # 🔴 MUTLAKA GÜNCELLE
-      # DEBUG satırı
-    with open("favorites.json", "w", encoding="utf-8") as f:
-        st.write("✅ FINAL FAVORITES:", favorites_data)
-        json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-        st.write("🔍 FAVORITES DEBUG:", favorites_data)  
-    st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
+    favorites_data[section] = updated_section
+
+# DEBUG satırı (isteğe bağlı)
+with open("favorites.json", "w", encoding="utf-8") as f:
+    st.write("✅ FINAL FAVORITES:", favorites_data)
+    json.dump(favorites_data, f, ensure_ascii=False, indent=4)
+    st.write("🔍 FAVORITES DEBUG:", favorites_data)
+st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
 
     # GitHub'a push et
     push_favorites_to_github()
@@ -307,3 +306,4 @@ st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p
 import os
 import base64
 import requests
+
