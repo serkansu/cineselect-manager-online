@@ -6,6 +6,8 @@ import base64
 def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
+        st.warning("⚠️ GITHUB_TOKEN environment variable is missing!")
+    if not github_token:
         st.error("❌ GitHub token bulunamadı. Environment variable ayarlanmalı.")
         return
 
@@ -65,6 +67,7 @@ def sync_with_firebase():
     }
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
+        st.write("🔍 FAVORITES DEBUG:", favorites_data)  # DEBUG SATIRI
     st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
 
     # GitHub'a push et
