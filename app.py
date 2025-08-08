@@ -143,7 +143,7 @@ for section in ["movies", "shows"]:
     with open("favorites.json", "w", encoding="utf-8") as f:
         st.write("✅ FINAL FAVORITES:", favorites_data)
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-        st.write("🔍 FAVORITES DEBUG:", favorites_data)  # DEBUG SATIRI
+        st.write("🔍 FAVORITES DEBUG:", favorites_data)  
     st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
 
     # GitHub'a push et
