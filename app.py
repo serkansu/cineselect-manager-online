@@ -188,22 +188,24 @@ with col2:
     if st.button("🖼️ Toggle Posters"):
         st.session_state["show_posters"] = not st.session_state["show_posters"]
 
-    if st.button("🔄 Senkronize Et (Firebase JSON)"):
-        sync_with_firebase()
-        push_favorites_to_github()
+if st.button("🔄 Senkronize Et (Firebase JSON)"):
+    sync_with_firebase()
+    push_favorites_to_github()
     st.success("✅ favorites.json senkronize edildi ve GitHub'a pushlandı!")
 
 def show_favorites_count():
-    global db
-    movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
-    series_docs = db.collection("favorites").where("type", "==", "show").stream()
+    """Firebase'den film ve dizi sayılarını çekip gösterir."""
+    try:
+        db = get_firestore()
+        movie_count = len(list(db.collection("favorites").where("type", "==", "movie").stream()))
+        series_count = len(list(db.collection("favorites").where("type", "==", "show").stream()))
+        
+        st.info(f"🎬 Favorite Movies: **{movie_count}** | 📺 Favorite TV Shows: **{series_count}**")
+    except Exception as e:
+        st.error(f"❌ Veriler çekilemedi: {str(e)}")
 
-    movie_count = len(list(movie_docs))
-    series_count = len(list(series_docs))
-
-    st.info(f"🎬 Favorite Movies: {movie_count} | 📺 Favorite TV Shows: {series_count}")
-    if st.button("📊 Favori Sayılarını Göster"):
-        show_favorites_count()
+# Streamlit arayüzünde çağırın (üst kısma ekleyin)
+show_favorites_count()  # Doğrudan çağırın, içinde butonla tekrar çağırmayın!
 
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
@@ -285,14 +287,16 @@ def show_favorites(fav_type, label):
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
-        imdb_display = f"{fav['imdb']:.1f}" if isinstance(fav["imdb"], (int, float)) else "N/A"
-        rt_display = f"{fav['rt']}%" if isinstance(fav["rt"], (int, float)) else "N/A"
+        # Eksik veriler için kontrol ekleyin
+        imdb_display = f"{fav['imdb']:.1f}" if isinstance(fav.get("imdb"), (int, float)) else fav.get("imdb", "N/A")
+        rt_display = f"{fav['rt']}%" if isinstance(fav.get("rt"), (int, float)) else fav.get("rt", "N/A")
+        
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
             if show_posters and fav.get("poster"):
                 st.image(fav["poster"], width=120)
         with cols[1]:
-            st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
+            st.markdown(f"**{idx+1}. {fav['title']} ({fav.get('year', 'N/A')})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
         with cols[2]:
             if st.button("❌", key=f"remove_{fav['id']}"):
                 db.collection("favorites").document(fav["id"]).delete()
@@ -322,8 +326,19 @@ st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p
 
 # Ana işlem akışı
 if __name__ == "__main__":
-    db = get_firestore()
-    if create_favorites_json():
-        print("✅ favorites.json başarıyla oluşturuldu!")
-    else:
-        print("❌ favorites.json oluşturulamadı!")
+    import streamlit.cli as stcli
+    import sys
+
+    def main():
+        # Firebase bağlantısını ve JSON'ı oluştur
+        db = get_firestore()
+        if create_favorites_json():
+            print("✅ favorites.json oluşturuldu!")
+        else:
+            print("❌ Hata!")
+
+        # Streamlit'i çalıştır
+        sys.argv = ["streamlit", "run", __file__]
+        sys.exit(stcli.main())
+
+    main()
