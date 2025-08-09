@@ -32,6 +32,8 @@ if os.path.exists(FAVORITES_FILE):
             if item and isinstance(item, dict) and "imdb" in item and "title" in item:
                 cleaned.append(item)
         favorites[key] = cleaned
+if not favorites:
+    favorites = {"movies": [], "series": []}
 # Temizleme işleminden hemen sonra ekle
 for key in ["movies", "series"]:
     for item in favorites.get(key, []):
@@ -52,8 +54,6 @@ if failed_items:
         print(f"   - {name}")
 else:
     print("✅ Tüm kayıtlar geçerli IMDb ID ile yüklendi.")
-else:
-    favorites = {"movies": [], "series": []}
 # TMDB API Key
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "3028d7f0a392920b78e3549d4e6a66ec")
 SEARCH_URL = "https://api.themoviedb.org/3/search/multi"
