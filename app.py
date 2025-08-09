@@ -280,12 +280,13 @@ def create_favorites_json():
             if str(it.get("type","")).strip().lower() in ("show", "tv", "series")
         ]
         # --------------------------------------------------------------
-        with open("favorites.json", "w", encoding="utf-8") as f:
-            json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-        return True
-    except Exception as e:
-        st.error(f"❌ favorites.json oluşturulamadı: {str(e)}")
-        return False
+try:  # ← BUNU ekle (with ile aynı hizadan)
+    with open("favorites.json", "w", encoding="utf-8") as f:
+        json.dump(favorites_data, f, ensure_ascii=False, indent=4)
+    return True  # with'ten çıktıktan sonra, ama try içinde
+except Exception as e:  # ← try ile aynı hizadan
+    st.error(f"❌ favorites.json oluşturulamadı: {str(e)}")
+    return False
 
 def sync_with_firebase():
     db = get_firestore()
