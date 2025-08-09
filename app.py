@@ -105,11 +105,33 @@ from firebase_setup import get_firestore
 db = get_firestore()
 from tmdb import search_movie, search_tv, search_by_actor
 
-def fix_invalid_imdb_ids(data):
-    for section in ["movies", "shows"]:
-        for item in data[section]:
+def create_favorites_json():
+    """Firestore'dan verileri çekip favorites.json dosyasını oluşturur"""
+    try:
+        favorites_data = {
+            "movies": [],
+            "shows": []
+        }
+
+        for doc in db.collection("favorites").stream():
+            item = doc.to_dict()
+            
+            # Sayısal IMDb değerlerini temizle
             if isinstance(item.get("imdb"), (int, float)):
                 item["imdb"] = ""
+            
+            if item["type"] == "movie":
+                favorites_data["movies"].append(item)
+            else:
+                favorites_data["shows"].append(item)
+
+        with open("favorites.json", "w", encoding="utf-8") as f:
+            json.dump(favorites_data, f, ensure_ascii=False, indent=4)
+        
+        return True
+    except Exception as e:
+        st.error(f"❌ favorites.json oluşturulurken hata: {e}")
+        return False
 
 def sync_with_firebase():
     db = get_firestore()
@@ -145,29 +167,19 @@ def sync_with_firebase():
     st.session_state["favorite_series"] = series
     st.success("✅ favorites.json güncellendi ve IMDb ID'ler düzeltildi.")
 
-# Firestore'dan güncel verileri çek ve JSON'a yaz
-db = get_firestore()
-favorites_data = {
-    "movies": [],
-    "shows": []
-}
-
-for doc in db.collection("favorites").stream():
-    item = doc.to_dict()
-    # Sayısal IMDb değerlerini temizle
-    if isinstance(item.get("imdb"), (int, float)):
-        item["imdb"] = ""
-    if item["type"] == "movie":
-        favorites_data["movies"].append(item)
+# Ana işlem akışı
+if __name__ == "__main__":
+    # Firestore bağlantısını kur
+    db = get_firestore()
+    
+    # favorites.json dosyasını oluştur
+    if create_favorites_json():
+        st.success("✅ favorites.json dosyası başarıyla oluşturuldu.")
+        
+        # GitHub'a push et
+        push_favorites_to_github()
     else:
-        favorites_data["shows"].append(item)
-
-with open("favorites.json", "w", encoding="utf-8") as f:
-    json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
-
-# GitHub'a push et
-push_favorites_to_github()
+        st.error("❌ favorites.json oluşturulamadı!")
 
 # Streamlit Arayüzü
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
