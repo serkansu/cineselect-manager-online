@@ -110,7 +110,7 @@ def push_favorites_to_github():
 def create_favorites_json():
     """Firestore'dan verileri çekip IMDb ID'leri düzeltilmiş favorites.json oluşturur"""
     try:
-        favorites_data = {"movies": [], "shows": []}
+        favorites_data = {"movies": [], "series": []}
         
         for doc in db.collection("favorites").stream():
             item = doc.to_dict()
@@ -130,7 +130,7 @@ def create_favorites_json():
             if item["type"] == "movie":
                 favorites_data["movies"].append(item)
             else:
-                favorites_data["shows"].append(item)
+                favorites_data["series"].append(item)
 
         with open("favorites.json", "w", encoding="utf-8") as f:
             json.dump(favorites_data, f, ensure_ascii=False, indent=4)
