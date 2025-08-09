@@ -10,7 +10,11 @@ import time
 # Firebase yapılandırması
 def get_firestore():
     if not firebase_admin._apps:
-        cred = credentials.Certificate("serviceAccountKey.json")
+        firebase_config = os.getenv("FIREBASE_ADMINSDK_JSON")
+        if firebase_config:
+            cred = credentials.Certificate(json.loads(firebase_config))
+        else:
+            cred = credentials.Certificate("firebase-adminsdk.json")
         firebase_admin.initialize_app(cred)
     return firestore.client()
 
