@@ -19,7 +19,41 @@ def get_firestore():
     return firestore.client()
 
 db = get_firestore()
+FAVORITES_FILE = "favorites.json"
 
+# Favoriler dosyasını oku (yoksa boş yapı oluştur)
+if os.path.exists(FAVORITES_FILE):
+    with open(FAVORITES_FILE, "r", encoding="utf-8") as f:
+        favorites = json.load(f)
+    # Bozuk veya eksik kayıtları ayıkla
+    for key in ["movies", "series"]:
+        cleaned = []
+        for item in favorites.get(key, []):
+            if item and isinstance(item, dict) and "imdb" in item and "title" in item:
+                cleaned.append(item)
+        favorites[key] = cleaned
+# Temizleme işleminden hemen sonra ekle
+for key in ["movies", "series"]:
+    for item in favorites.get(key, []):
+        imdb_id = item.get("imdb", "").strip()
+        if not imdb_id or imdb_id == "tt0000000":
+            print(f"❌ '{item.get('title', 'Bilinmeyen')}' ({key}) yüklenemedi.")
+# Başarısız kayıtları say ve isimlerini topla
+failed_items = []
+for key in ["movies", "series"]:
+    for item in favorites.get(key, []):
+        imdb_id = (item.get("imdb") or "").strip()
+        if not imdb_id or imdb_id == "tt0000000":
+            failed_items.append(f"{item.get('title', 'Bilinmeyen')} [{key}]")
+
+if failed_items:
+    print(f"❌ Toplam yüklenemeyen kayıt: {len(failed_items)}")
+    for name in failed_items:
+        print(f"   - {name}")
+else:
+    print("✅ Tüm kayıtlar geçerli IMDb ID ile yüklendi.")
+else:
+    favorites = {"movies": [], "series": []}
 # TMDB API Key
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "3028d7f0a392920b78e3549d4e6a66ec")
 SEARCH_URL = "https://api.themoviedb.org/3/search/multi"
