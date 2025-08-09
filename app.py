@@ -386,12 +386,12 @@ if __name__ == "__main__":
         import streamlit.cli as stcli
 import sys  # ← burası dışarıda olmalı
 
-    def main():
-        # Firebase bağlantısını ve JSON'u oluştur
-        db = get_firestore()
-        if create_favorites_json():
-            print("✅ favorites.json oluşturuldu!")
-        else:
-            print("❌ Hata!")
+def main():
+    # Firebase bağlantısını ve JSON'u oluştur
+    db = get_firestore()
+    if create_favorites_json():
+        print("✅ favorites.json oluşturuldu!")
+    else:
+        print("❌ Hata!")
 
-    main()
+main()
