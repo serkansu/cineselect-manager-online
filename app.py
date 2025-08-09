@@ -350,11 +350,10 @@ def sync_with_firebase(enrich=False, max_updates=50):
             pass
         # --------------------------------------------------
         if enrich and (not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000"):
-    if updates >= max_updates:
-        break
+            if updates >= max_updates:
+                break
         # Bu turda limit doldu; kalanları sonraya bırak
-        pass
-    else:
+       
         is_series = item.get("type", "").lower() in ["show", "series"]
         imdb_id = get_imdb_id(
             item["title"],
@@ -365,6 +364,7 @@ def sync_with_firebase(enrich=False, max_updates=50):
         item["imdb"] = imdb_id
         try:
             db.collection("favorites").document(doc.id).update({"imdb": imdb_id})
+            updates += 1             # ← IMDb güncellemesi sayacı burada artıyor
         except Exception:
             pass
         updates += 1
