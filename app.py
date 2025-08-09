@@ -37,13 +37,13 @@ if os.path.exists(FAVORITES_FILE):
                 cleaned.append(item)
         favorites[key] = cleaned
         # CineSelect puanına göre (büyükten küçüğe), sonra yıl ve başlığa göre sırala
-favorites[key].sort(
-    key=lambda x: (
-        -(int(x.get("cineselectRating", 0) or 0)),
-        -(int(str(x.get("year", "0"))[:4] or 0)),
-        x.get("title", "").lower()
-    )
-)
+        favorites[key].sort(
+            key=lambda x: (
+                -(int(x.get("cineselectRating", 0) or 0)),
+                -(int(str(x.get("year", "0"))[:4] or 0)),
+                x.get("title", "").lower()
+            )
+        )
 # IMDb ID'si eksik olanları TMDB'den otomatik doldur
 updated_count = 0
 for key in ["movies", "series"]:
