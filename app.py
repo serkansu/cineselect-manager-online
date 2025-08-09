@@ -6,7 +6,6 @@ import json
 import base64
 import os
 import time
-
 # Firebase yapılandırması
 def get_firestore():
     if not firebase_admin._apps:
