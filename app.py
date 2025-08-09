@@ -380,19 +380,18 @@ st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p
 
 # Ana işlem akışı
 if __name__ == "__main__":
-    import streamlit.cli as stcli
-    import sys
+    try:
+        from streamlit.web import cli as stcli
+    except ImportError:
+        import streamlit.cli as stcli
+import sys  # ← burası dışarıda olmalı
 
     def main():
-        # Firebase bağlantısını ve JSON'ı oluştur
+        # Firebase bağlantısını ve JSON'u oluştur
         db = get_firestore()
         if create_favorites_json():
             print("✅ favorites.json oluşturuldu!")
         else:
             print("❌ Hata!")
-
-        # Streamlit'i çalıştır
-        sys.argv = ["streamlit", "run", __file__]
-        sys.exit(stcli.main())
 
     main()
