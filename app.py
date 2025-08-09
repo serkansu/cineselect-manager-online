@@ -4,6 +4,8 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import json
 import base64
+import os
+
 def get_imdb_id_from_tmdb(title, year=None, is_series=False, poster_url=""):
     tmdb_api_key = os.getenv("TMDB_API_KEY")
     if not tmdb_api_key:
@@ -34,7 +36,7 @@ def get_imdb_id_from_tmdb(title, year=None, is_series=False, poster_url=""):
                     match = r
                     break
 
-        tmdb_id = match["id"]
+        tmdb_id = match['id']
         media_type = match.get("media_type", "tv" if is_series else "movie")
 
         # IMDb ID'yi al
@@ -47,12 +49,11 @@ def get_imdb_id_from_tmdb(title, year=None, is_series=False, poster_url=""):
     except Exception as e:
         print(f"❌ IMDb ID alınırken hata: {e}")
         return "tt0000000"
-import os
+
 def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
         st.warning("⚠️ GITHUB_TOKEN environment variable is missing!")
-    if not github_token:
         st.error("❌ GitHub token bulunamadı. Environment variable ayarlanmalı.")
         return
 
@@ -99,11 +100,11 @@ def push_favorites_to_github():
             st.code(put_response.json())
         except:
             st.write("Yanıt alınamadı.")
-import streamlit as st
+
 from firebase_setup import get_firestore
 db = get_firestore()
-from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
-import json
+from tmdb import search_movie, search_tv, search_by_actor
+
 def fix_invalid_imdb_ids(data):
     for section in ["movies", "shows"]:
         for item in data[section]:
@@ -119,20 +120,18 @@ def sync_with_firebase():
     for doc in db.collection("favorites").stream():
         item = doc.to_dict()
             
-        # Eksik/geçersiz IMDb ID varsa yeniden al
-        if not item.get("imdb") or item["imdb"] == "tt0000000":
+        # Eksik/geçersiz IMDb ID varsa yeniden al (sayısal puanları temizle)
+        if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)):
             is_series = item.get("type", "").lower() in ["show", "series"]
             imdb_id = get_imdb_id_from_tmdb(
                 item["title"],
                 item.get("year"),
                 is_series,
-                item.get("poster", "")  # Poster URL'sini de kullan
+                item.get("poster", "")
             )
             item["imdb"] = imdb_id
-            # Firestore'da güncelle (opsiyonel)
             db.collection("favorites").document(doc.id).update({"imdb": imdb_id})
 
-        # Dizi/film ayrımı yap
         if item["type"] == "movie":
             movies.append(item)
         else:
@@ -142,24 +141,35 @@ def sync_with_firebase():
     favorites_data = {"movies": movies, "shows": series}
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-    # Yeni eklenen kısım (session güncelleme)
     st.session_state["favorite_movies"] = movies
     st.session_state["favorite_series"] = series
-    st.success("✅ favorites.json güncellendi ve IMDb ID'ler kontrol edildi.")
+    st.success("✅ favorites.json güncellendi ve IMDb ID'ler düzeltildi.")
+
 # Firestore'dan güncel verileri çek ve JSON'a yaz
 db = get_firestore()
 favorites_data = {
-    "movies": [doc.to_dict() for doc in db.collection("favorites").where("type", "==", "movie").stream()],
-    "shows": [doc.to_dict() for doc in db.collection("favorites").where("type", "==", "show").stream()]
+    "movies": [],
+    "shows": []
 }
+
+for doc in db.collection("favorites").stream():
+    item = doc.to_dict()
+    # Sayısal IMDb değerlerini temizle
+    if isinstance(item.get("imdb"), (int, float)):
+        item["imdb"] = ""
+    if item["type"] == "movie":
+        favorites_data["movies"].append(item)
+    else:
+        favorites_data["shows"].append(item)
 
 with open("favorites.json", "w", encoding="utf-8") as f:
     json.dump(favorites_data, f, ensure_ascii=False, indent=4)
 st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
 
-    # GitHub'a push et
+# GitHub'a push et
 push_favorites_to_github()
 
+# Streamlit Arayüzü
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
 st.markdown("""
     <h1 style='text-align:center;'>🍿 <b>Serkan's Watchagain Movies & Series <span style="color:#2ecc71;">ONLINE ✅</span></b></h1>
@@ -179,7 +189,7 @@ with col2:
 
     if st.button("🔄 Senkronize Et (Firebase JSON)"):
         sync_with_firebase()
-        push_favorites_to_github()  # Otomatik GitHub'a push
+        push_favorites_to_github()
     st.success("✅ favorites.json senkronize edildi ve GitHub'a pushlandı!")
 
 def show_favorites_count():
@@ -308,11 +318,3 @@ if st.button("🔝 Go to Top Again"):
     st.rerun()
 
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
-
-
-
-import os
-import base64
-import requests
-import subprocess
-
