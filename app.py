@@ -351,7 +351,7 @@ def sync_with_firebase(enrich=False, max_updates=50):
         # --------------------------------------------------
         if enrich and (not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000"):
     if updates >= max_updates:
-        return
+        break
         # Bu turda limit doldu; kalanları sonraya bırak
         pass
     else:
