@@ -230,7 +230,6 @@ def push_favorites_to_github():
 
 def create_favorites_json():
     """Firestore'dan verileri çekip IMDb ID'leri düzeltilmiş favorites.json oluşturur"""
-    try:
         favorites_data = {"movies": [], "series": []}
         
         for doc in db.collection("favorites").stream():
@@ -351,7 +350,35 @@ def sync_with_firebase():
         return cleaned
 
     movies = sanitize_items(movies)
+        # --- SANITIZATION BLOCK (2. yazma öncesi) ---
+    def sanitize_items(items):
+        cleaned = []
+        for item in items:
+            # type normalize
+            raw_type = str(item.get("type", "")).strip().lower()
+            if raw_type in ("movie", "film"):
+                item["type"] = "movie"
+            elif raw_type in ("show", "tv", "series", "tvshow"):
+                item["type"] = "show"
+            else:
+                item["type"] = "movie"
+
+            # basic field trims
+            if isinstance(item.get("imdb"), str):
+                item["imdb"] = item["imdb"].strip()
+            if isinstance(item.get("title"), str):
+                item["title"] = item["title"].strip()
+
+            cleaned.append(item)
+        return cleaned
+
+    movies = sanitize_items(movies)
     series = sanitize_items(series)
+
+    # güvenlik: yanlış gruba sızanları ele
+    movies = [it for it in movies if str(it.get("type","")).strip().lower() == "movie"]
+    series = [it for it in series if str(it.get("type","")).strip().lower() == "show"]
+    # --------------------------------------------------------------
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump({"movies": movies, "series": series}, f, ensure_ascii=False, indent=4)
     st.session_state["favorite_movies"] = movies
