@@ -24,6 +24,7 @@ db = get_firestore()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "3028d7f0a392920b78e3549d4e6a66ec")
 SEARCH_URL = "https://api.themoviedb.org/3/search/multi"
 EXTERNAL_IDS_URL = "https://api.themoviedb.org/3/{media_type}/{tmdb_id}/external_ids"
+POSTER_BASE = "https://image.tmdb.org/t/p/w500"
 
 def get_imdb_id(title, poster_url="", year=None, is_series=False):
     """Geliştirilmiş IMDb ID alma fonksiyonu"""
@@ -57,6 +58,59 @@ def get_imdb_id(title, poster_url="", year=None, is_series=False):
     except Exception as e:
         print(f"❌ IMDb ID alınırken hata ({title}): {str(e)}")
         return "tt0000000"
+def _norm_item_from_tmdb(r, media_type):
+    """TMDB sonucu -> uygulama formatı."""
+    if media_type == "movie":
+        title = r.get("title") or r.get("name") or ""
+        year = (r.get("release_date") or "")[:4]
+    else:  # "tv"
+        title = r.get("name") or r.get("title") or ""
+        year = (r.get("first_air_date") or "")[:4]
+
+    poster = f"{POSTER_BASE}{r['poster_path']}" if r.get("poster_path") else ""
+    imdb_id = get_imdb_id(title=title, poster_url=poster, year=year, is_series=(media_type == "tv"))
+
+    return {
+        "id": f"tmdb{r.get('id')}",
+        "title": title,
+        "year": year,
+        "imdb": imdb_id,
+        "poster": poster,
+        "rt": 0,                    # İstersen sonra OMDb ile doldururuz
+        "cineselectRating": 5000,   # Başlangıç değeri; slider ile güncellersin
+        "type": "movie" if media_type == "movie" else "show"
+    }
+
+def search_movie(query: str):
+    """Film araması."""
+    url = "https://api.themoviedb.org/3/search/movie"
+    res = requests.get(url, params={"api_key": TMDB_API_KEY, "query": query})
+    res.raise_for_status()
+    results = res.json().get("results", [])[:20]
+    return [_norm_item_from_tmdb(r, "movie") for r in results]
+
+def search_tv(query: str):
+    """Dizi (TV) araması."""
+    url = "https://api.themoviedb.org/3/search/tv"
+    res = requests.get(url, params={"api_key": TMDB_API_KEY, "query": query})
+    res.raise_for_status()
+    results = res.json().get("results", [])[:20]
+    return [_norm_item_from_tmdb(r, "tv") for r in results]
+
+def search_by_actor(query: str):
+    """Oyuncu araması: kişinin 'known_for' listesinden film/dizi döndürür."""
+    url = "https://api.themoviedb.org/3/search/person"
+    res = requests.get(url, params={"api_key": TMDB_API_KEY, "query": query})
+    res.raise_for_status()
+    people = res.json().get("results", [])
+    items = []
+    for p in people[:5]:
+        for k in p.get("known_for", [])[:10]:
+            if k.get("media_type") == "movie":
+                items.append(_norm_item_from_tmdb(k, "movie"))
+            elif k.get("media_type") == "tv":
+                items.append(_norm_item_from_tmdb(k, "tv"))
+    return items
 
 def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
