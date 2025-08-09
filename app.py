@@ -165,7 +165,7 @@ def sync_with_firebase():
             series.append(item)
 
     with open("favorites.json", "w", encoding="utf-8") as f:
-        json.dump({"movies": movies, "shows": series}, f, ensure_ascii=False, indent=4)
+        json.dump({"movies": movies, "series": series}, f, ensure_ascii=False, indent=4)
     st.session_state["favorite_movies"] = movies
     st.session_state["favorite_series"] = series
     st.success("✅ favorites.json güncellendi ve IMDb ID'ler düzeltildi.")
