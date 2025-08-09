@@ -6,6 +6,7 @@ import json
 import base64
 import os
 import time
+
 # Firebase yapılandırması
 def get_firestore():
     if not firebase_admin._apps:
@@ -103,22 +104,34 @@ EXTERNAL_IDS_URL = "https://api.themoviedb.org/3/{media_type}/{tmdb_id}/external
 POSTER_BASE = "https://image.tmdb.org/t/p/w500"
 
 def get_imdb_id(title, poster_url="", year=None, is_series=False):
-    """Geliştirilmiş IMDb ID alma fonksiyonu"""
+    """IMDb ID alma (retry + backoff + timeout ile)"""
     params = {
         "api_key": TMDB_API_KEY,
         "query": title,
         "year": year if not is_series else None,
         "first_air_date_year": year if is_series else None,
     }
-    
+
     try:
-        res = requests.get(SEARCH_URL, params=params)
-        res.raise_for_status()
+        # --- SEARCH: retry + backoff ---
+        for attempt in range(4):
+            res = requests.get(SEARCH_URL, params=params, timeout=6)
+            if res.status_code == 429:
+                wait = int(res.headers.get("Retry-After", "4"))
+                time.sleep(min(wait, 10))
+                continue
+            try:
+                res.raise_for_status()
+                break
+            except Exception:
+                if attempt == 3:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
         results = res.json().get("results", [])
         if not results:
             return "tt0000000"
 
-        # Poster URL'si ile eşleşen sonucu bul
         match = next(
             (r for r in results if r.get("poster_path") and poster_url and r["poster_path"] in poster_url),
             results[0]
@@ -126,12 +139,28 @@ def get_imdb_id(title, poster_url="", year=None, is_series=False):
 
         tmdb_id = match["id"]
         media_type = match.get("media_type", "tv" if is_series else "movie")
-
         external_url = EXTERNAL_IDS_URL.format(media_type=media_type, tmdb_id=tmdb_id)
-        ext_res = requests.get(external_url, params={"api_key": TMDB_API_KEY})
-        ext_res.raise_for_status()
+
+        # --- EXTERNAL IDS: retry + backoff ---
+        for attempt in range(4):
+            ext_res = requests.get(external_url, params={"api_key": TMDB_API_KEY}, timeout=6)
+            if ext_res.status_code == 429:
+                wait = int(ext_res.headers.get("Retry-After", "4"))
+                time.sleep(min(wait, 10))
+                continue
+            try:
+                ext_res.raise_for_status()
+                break
+            except Exception:
+                if attempt == 3:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
         return ext_res.json().get("imdb_id", "tt0000000")
+
     except Exception as e:
+        print(f"❌ IMDb ID alınırken hata ({title}): {str(e)}")
+        return "tt0000000"
         print(f"❌ IMDb ID alınırken hata ({title}): {str(e)}")
         return "tt0000000"
 def _norm_item_from_tmdb(r, media_type):
@@ -297,10 +326,11 @@ def create_favorites_json():
         st.error(f"❌ favorites.json oluşturulamadı: {str(e)}")
         return False
 
-def sync_with_firebase():
+def sync_with_firebase(enrich=False, max_updates=50):
     db = get_firestore()
     movies = []
     series = []
+    updates = 0
     
     for doc in db.collection("favorites").stream():
         item = doc.to_dict()
@@ -319,17 +349,25 @@ def sync_with_firebase():
         except Exception:
             pass
         # --------------------------------------------------
-        if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000":
-            is_series = item.get("type", "").lower() in ["show", "series"]
-            imdb_id = get_imdb_id(
-                item["title"],
-                item.get("poster", ""),
-                item.get("year"),
-                is_series
-            )
-            item["imdb"] = imdb_id
+        if enrich and (not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000"):
+    if updates >= max_updates:
+        # Bu turda limit doldu; kalanları sonraya bırak
+        pass
+    else:
+        is_series = item.get("type", "").lower() in ["show", "series"]
+        imdb_id = get_imdb_id(
+            item["title"],
+            item.get("poster", ""),
+            item.get("year"),
+            is_series
+        )
+        item["imdb"] = imdb_id
+        try:
             db.collection("favorites").document(doc.id).update({"imdb": imdb_id})
-            time.sleep(0.1)
+        except Exception:
+            pass
+        updates += 1
+        time.sleep(0.1)
 
         if item["type"] == "movie":
             movies.append(item)
@@ -413,8 +451,11 @@ with col2:
     if st.button("🖼️ Toggle Posters"):
         st.session_state["show_posters"] = not st.session_state["show_posters"]
 
+do_enrich = st.checkbox("IMDb ID’leri TMDB’den doldur (limitli, yavaş olabilir)", value=False)
+
 if st.button("🔄 Senkronize Et (Firebase JSON)"):
-    sync_with_firebase()
+    # enrich True ise 50 kayda kadar TMDB çağrısı yapar, aksi halde hiç yapmaz
+    sync_with_firebase(enrich=do_enrich, max_updates=50)
     push_favorites_to_github()
     st.success("✅ favorites.json senkronize edildi ve GitHub'a pushlandı!")
 
