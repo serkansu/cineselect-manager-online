@@ -36,8 +36,14 @@ if os.path.exists(FAVORITES_FILE):
             if item and isinstance(item, dict) and "imdb" in item and "title" in item:
                 cleaned.append(item)
         favorites[key] = cleaned
-        # Cineselect puanına göre (büyükten küçüğe) sırala
-        favorites[key].sort(key=lambda x: x.get("cineselectRating", 0), reverse=True)
+        # CineSelect puanına göre (büyükten küçüğe), sonra yıl ve başlığa göre sırala
+favorites[key].sort(
+    key=lambda x: (
+        -(int(x.get("cineselectRating", 0) or 0)),
+        -(int(str(x.get("year", "0"))[:4] or 0)),
+        x.get("title", "").lower()
+    )
+)
 # IMDb ID'si eksik olanları TMDB'den otomatik doldur
 updated_count = 0
 for key in ["movies", "series"]:
@@ -64,10 +70,10 @@ for key in ["movies", "series"]:
                 print(f"⚠ IMDb bulunamadı: {title}")
 
 # Güncelleme yapıldıysa dosyayı geri yaz
-if updated_count > 0:
-    with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
-        json.dump(favorites, f, ensure_ascii=False, indent=4)
-    print(f"💾 {updated_count} kayıt için IMDb güncellenip favorites.json kaydedildi.")
+# Temizleme + sıralama sonrası favorites.json'u her koşulda yaz
+with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
+    json.dump(favorites, f, ensure_ascii=False, indent=4)
+print("💾 favorites.json temizlenip sıralı şekilde kaydedildi.")
 # Tek tek uyarı
 for key in ["movies", "series"]:
     for item in favorites.get(key, []):
