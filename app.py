@@ -20,11 +20,15 @@ def get_firestore():
 
 db = get_firestore()
 FAVORITES_FILE = "favorites.json"
-
-# Favoriler dosyasını oku (yoksa boş yapı oluştur)
+favorites = {"movies": [], "series": []}  # Ön tanım
+# Eğer favorites.json dosyası varsa, onu yükle
 if os.path.exists(FAVORITES_FILE):
-    with open(FAVORITES_FILE, "r", encoding="utf-8") as f:
-        favorites = json.load(f)
+    try:
+        with open(FAVORITES_FILE, "r", encoding="utf-8") as f:
+            favorites = json.load(f)
+    except json.JSONDecodeError:
+        pass  # default 'favorites' ile devam et
+# Favoriler dosyasını oku (yoksa boş yapı oluştur)
     # Bozuk veya eksik kayıtları ayıkla
     for key in ["movies", "series"]:
         cleaned = []
@@ -32,21 +36,50 @@ if os.path.exists(FAVORITES_FILE):
             if item and isinstance(item, dict) and "imdb" in item and "title" in item:
                 cleaned.append(item)
         favorites[key] = cleaned
-if not favorites:
-    favorites = {"movies": [], "series": []}
-# Temizleme işleminden hemen sonra ekle
+# IMDb ID'si eksik olanları TMDB'den otomatik doldur
+updated_count = 0
+for key in ["movies", "series"]:
+    for item in favorites.get(key, []):
+        imdb_id = (item.get("imdb") or "").strip()
+        if not imdb_id or imdb_id == "tt0000000":
+            title = item.get("title", "")
+            poster = item.get("poster", "")
+            year = (str(item.get("year", "")).strip() or None)
+            is_series = (key == "series") or (item.get("type") == "show")
+
+            new_imdb = get_imdb_id(
+                title=title,
+                poster_url=poster,
+                year=year,
+                is_series=is_series
+            )
+
+            if new_imdb and new_imdb != "tt0000000":
+                item["imdb"] = new_imdb
+                updated_count += 1
+                print(f"✅ IMDb güncellendi: {title} -> {new_imdb}")
+            else:
+                print(f"⚠ IMDb bulunamadı: {title}")
+
+# Güncelleme yapıldıysa dosyayı geri yaz
+if updated_count > 0:
+    with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
+        json.dump(favorites, f, ensure_ascii=False, indent=4)
+    print(f"💾 {updated_count} kayıt için IMDb güncellenip favorites.json kaydedildi.")
+# Tek tek uyarı
 for key in ["movies", "series"]:
     for item in favorites.get(key, []):
         imdb_id = item.get("imdb", "").strip()
         if not imdb_id or imdb_id == "tt0000000":
             print(f"❌ '{item.get('title', 'Bilinmeyen')}' ({key}) yüklenemedi.")
-# Başarısız kayıtları say ve isimlerini topla
+
+# Toplam say ve listele
 failed_items = []
 for key in ["movies", "series"]:
     for item in favorites.get(key, []):
         imdb_id = (item.get("imdb") or "").strip()
         if not imdb_id or imdb_id == "tt0000000":
-            failed_items.append(f"{item.get('title', 'Bilinmeyen')} [{key}]")
+            failed_items.append(f"{item.get('title','Bilinmeyen')} [{key}]")
 
 if failed_items:
     print(f"❌ Toplam yüklenemeyen kayıt: {len(failed_items)}")
