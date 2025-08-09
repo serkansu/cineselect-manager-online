@@ -235,7 +235,24 @@ def create_favorites_json():
         
         for doc in db.collection("favorites").stream():
             item = doc.to_dict()
-            
+            # --- TYPE NORMALIZATION (fix trailing \n etc.) ---
+            raw_type = str(item.get("type", item.get("media_type", ""))).strip().lower()
+            if raw_type in ("movie", "film"):
+                norm_type = "movie"
+            elif raw_type in ("show", "tv", "series", "tvshow"):
+                norm_type = "show"
+            else:
+    # emin olamıyorsak default movie
+                norm_type = "movie"
+            item["type"] = norm_type
+
+# (İSTEĞE BAĞLI) Firebase içindeki kirli kaydı da düzelt:
+            try:
+                if item.get("type") != raw_type:  # ya da always normalize
+                    db.collection("favorites").document(doc.id).update({"type": norm_type})
+            except Exception:
+                pass
+# --------------------------------------------------
             # Eksik/geçersiz IMDb ID varsa yeniden al
             if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000":
                 is_series = item.get("type", "").lower() in ["show", "series"]
@@ -252,7 +269,18 @@ def create_favorites_json():
                 favorites_data["movies"].append(item)
             else:
                 favorites_data["series"].append(item)
-
+        # --- sanitize before dump (force types & filter misplaced) ---
+        favorites_data["movies"] = [
+            {**it, "type": "movie"}
+            for it in favorites_data.get("movies", [])
+            if str(it.get("type","")).strip().lower() in ("movie", "")
+        ]
+        favorites_data["series"] = [
+            {**it, "type": "show"}
+            for it in favorites_data.get("series", [])
+            if str(it.get("type","")).strip().lower() in ("show", "tv", "series")
+        ]
+        # --------------------------------------------------------------
         with open("favorites.json", "w", encoding="utf-8") as f:
             json.dump(favorites_data, f, ensure_ascii=False, indent=4)
         return True
@@ -267,7 +295,21 @@ def sync_with_firebase():
     
     for doc in db.collection("favorites").stream():
         item = doc.to_dict()
-            
+        # --- TYPE NORMALIZATION (fix trailing \n etc.) ---
+        raw_type = str(item.get("type", item.get("media_type", ""))).strip().lower()
+        if raw_type in ("movie", "film"):
+            item["type"] = "movie"
+        elif raw_type in ("show", "tv", "series", "tvshow"):
+            item["type"] = "show"
+        else:
+            item["type"] = "movie"
+        # (opsiyonel) Firebase içindeki kirli değeri de düzelt
+        try:
+            if item.get("type") != raw_type:
+                db.collection("favorites").document(doc.id).update({"type": item["type"]})
+        except Exception:
+            pass
+        # --------------------------------------------------
         if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000":
             is_series = item.get("type", "").lower() in ["show", "series"]
             imdb_id = get_imdb_id(
@@ -284,7 +326,32 @@ def sync_with_firebase():
             movies.append(item)
         else:
             series.append(item)
+    # --- SANITIZATION BLOCK (2. yazma öncesi) ---
+    def sanitize_items(items):
+        cleaned = []
+        for item in items:
+            # type alanını normalize et
+            raw_type = str(item.get("type", "")).strip().lower()
+            if raw_type in ("movie", "film"):
+                item["type"] = "movie"
+            elif raw_type in ("show", "tv", "series", "tvshow"):
+                item["type"] = "show"
+            else:
+                item["type"] = "movie"
 
+            # imdb alanını temizle
+            if isinstance(item.get("imdb"), str):
+                item["imdb"] = item["imdb"].strip()
+
+            # title alanındaki boşlukları ve satır sonlarını temizle
+            if isinstance(item.get("title"), str):
+                item["title"] = item["title"].strip()
+
+            cleaned.append(item)
+        return cleaned
+
+    movies = sanitize_items(movies)
+    series = sanitize_items(series)
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump({"movies": movies, "series": series}, f, ensure_ascii=False, indent=4)
     st.session_state["favorite_movies"] = movies
