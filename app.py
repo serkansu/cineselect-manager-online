@@ -71,6 +71,14 @@ for key in ["movies", "series"]:
 
 # Güncelleme yapıldıysa dosyayı geri yaz
 # Temizleme + sıralama sonrası favorites.json'u her koşulda yaz
+for key in ["movies", "series"]:
+    favorites[key].sort(
+        key=lambda x: (
+            -(int(x.get("cineselectRating", 0) or 0)),
+            -(int(str(x.get("year", "0"))[:4] or 0)),
+            x.get("title", "").lower()
+        )
+    )
 with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
     json.dump(favorites, f, ensure_ascii=False, indent=4)
 print("💾 favorites.json temizlenip sıralı şekilde kaydedildi.")
