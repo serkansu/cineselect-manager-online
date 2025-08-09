@@ -36,6 +36,8 @@ if os.path.exists(FAVORITES_FILE):
             if item and isinstance(item, dict) and "imdb" in item and "title" in item:
                 cleaned.append(item)
         favorites[key] = cleaned
+        # Cineselect puanına göre (büyükten küçüğe) sırala
+        favorites[key].sort(key=lambda x: x.get("cineselectRating", 0), reverse=True)
 # IMDb ID'si eksik olanları TMDB'den otomatik doldur
 updated_count = 0
 for key in ["movies", "series"]:
