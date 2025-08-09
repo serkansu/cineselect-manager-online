@@ -230,27 +230,27 @@ def push_favorites_to_github():
 
 def create_favorites_json():
     """Firestore'dan verileri çekip IMDb ID'leri düzeltilmiş favorites.json oluşturur"""
-        favorites_data = {"movies": [], "series": []}
+    favorites_data = {"movies": [], "series": []}
         
-        for doc in db.collection("favorites").stream():
-            item = doc.to_dict()
-            # --- TYPE NORMALIZATION (fix trailing \n etc.) ---
-            raw_type = str(item.get("type", item.get("media_type", ""))).strip().lower()
-            if raw_type in ("movie", "film"):
-                norm_type = "movie"
-            elif raw_type in ("show", "tv", "series", "tvshow"):
-                norm_type = "show"
-            else:
+    for doc in db.collection("favorites").stream():
+        item = doc.to_dict()
+        # --- TYPE NORMALIZATION (fix trailing \n etc.) ---
+        raw_type = str(item.get("type", item.get("media_type", ""))).strip().lower()
+        if raw_type in ("movie", "film"):
+            norm_type = "movie"
+        elif raw_type in ("show", "tv", "series", "tvshow"):
+            norm_type = "show"
+        else:
     # emin olamıyorsak default movie
-                norm_type = "movie"
-            item["type"] = norm_type
+            norm_type = "movie"
+        item["type"] = norm_type
 
 # (İSTEĞE BAĞLI) Firebase içindeki kirli kaydı da düzelt:
-            try:
-                if item.get("type") != raw_type:  # ya da always normalize
-                    db.collection("favorites").document(doc.id).update({"type": norm_type})
-            except Exception:
-                pass
+        try:
+            if item.get("type") != raw_type:  # ya da always normalize
+                db.collection("favorites").document(doc.id).update({"type": norm_type})
+        except Exception:
+            pass
 # --------------------------------------------------
             # Eksik/geçersiz IMDb ID varsa yeniden al
             if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000":
