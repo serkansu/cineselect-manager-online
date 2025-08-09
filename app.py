@@ -101,6 +101,7 @@ def push_favorites_to_github():
             st.write("Yanıt alınamadı.")
 import streamlit as st
 from firebase_setup import get_firestore
+db = get_firestore()
 from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
 import json
 def fix_invalid_imdb_ids(data):
@@ -141,21 +142,16 @@ def sync_with_firebase():
     favorites_data = {"movies": movies, "shows": series}
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(favorites_data, f, ensure_ascii=False, indent=4)
+    # Yeni eklenen kısım (session güncelleme)
+    st.session_state["favorite_movies"] = movies
+    st.session_state["favorite_series"] = series
     st.success("✅ favorites.json güncellendi ve IMDb ID'ler kontrol edildi.")
-favorites_data = {"movies": [], "shows": []}
-# Dizilerin type'ını 'show' olarak normalize et
-for section in ["movies", "shows"]:
-    updated_section = []
-    for item in favorites_data.get(section, []):
-        if "series" in str(item.get("type", "")).lower():
-            item["type"] = "show"
-        title = item.get("title", "")
-        year = item.get("year", "")
-        is_series = True if section == "shows" else False
-        imdb_id = get_imdb_id_from_tmdb(title, year, is_series)
-        item["imdb"] = imdb_id
-        updated_section.append(item)
-    favorites_data[section] = updated_section
+# Firestore'dan güncel verileri çek ve JSON'a yaz
+db = get_firestore()
+favorites_data = {
+    "movies": [doc.to_dict() for doc in db.collection("favorites").where("type", "==", "movie").stream()],
+    "shows": [doc.to_dict() for doc in db.collection("favorites").where("type", "==", "show").stream()]
+}
 
 with open("favorites.json", "w", encoding="utf-8") as f:
     json.dump(favorites_data, f, ensure_ascii=False, indent=4)
@@ -187,6 +183,7 @@ with col2:
     st.success("✅ favorites.json senkronize edildi ve GitHub'a pushlandı!")
 
 def show_favorites_count():
+    global db
     movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
     series_docs = db.collection("favorites").where("type", "==", "show").stream()
 
@@ -271,6 +268,7 @@ def get_sort_key(fav):
         return 0
 
 def show_favorites(fav_type, label):
+    global db
     docs = db.collection("favorites").where("type", "==", fav_type).stream()
     favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
 
