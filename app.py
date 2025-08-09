@@ -5,49 +5,53 @@ from firebase_admin import credentials, firestore
 import json
 import base64
 import os
+import time
 
-def get_imdb_id_from_tmdb(title, year=None, is_series=False, poster_url=""):
-    tmdb_api_key = os.getenv("TMDB_API_KEY")
-    if not tmdb_api_key:
-        print("❌ TMDB API key not found in environment variables.")
-        return "tt0000000"  # Default bir ID dön
+# Firebase yapılandırması
+def get_firestore():
+    if not firebase_admin._apps:
+        cred = credentials.Certificate("serviceAccountKey.json")
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
 
-    # TMDB'de "multi" search yap (hem film hem dizi)
-    search_url = "https://api.themoviedb.org/3/search/multi"
+db = get_firestore()
+
+# TMDB API Key
+TMDB_API_KEY = os.getenv("TMDB_API_KEY", "3028d7f0a392920b78e3549d4e6a66ec")
+SEARCH_URL = "https://api.themoviedb.org/3/search/multi"
+EXTERNAL_IDS_URL = "https://api.themoviedb.org/3/{media_type}/{tmdb_id}/external_ids"
+
+def get_imdb_id(title, poster_url="", year=None, is_series=False):
+    """Geliştirilmiş IMDb ID alma fonksiyonu"""
     params = {
-        "api_key": tmdb_api_key,
+        "api_key": TMDB_API_KEY,
         "query": title,
         "year": year if not is_series else None,
         "first_air_date_year": year if is_series else None,
     }
-
+    
     try:
-        response = requests.get(search_url, params=params)
-        response.raise_for_status()
-        results = response.json().get("results", [])
+        res = requests.get(SEARCH_URL, params=params)
+        res.raise_for_status()
+        results = res.json().get("results", [])
         if not results:
             return "tt0000000"
 
-        # Poster URL'si varsa eşleşen sonucu bul
-        match = results[0]  # Varsayılan: ilk sonuç
-        if poster_url:
-            for r in results:
-                if r.get("poster_path") and r["poster_path"] in poster_url:
-                    match = r
-                    break
+        # Poster URL'si ile eşleşen sonucu bul
+        match = next(
+            (r for r in results if r.get("poster_path") and poster_url and r["poster_path"] in poster_url),
+            results[0]
+        )
 
-        tmdb_id = match['id']
+        tmdb_id = match["id"]
         media_type = match.get("media_type", "tv" if is_series else "movie")
 
-        # IMDb ID'yi al
-        external_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}/external_ids"
-        ext_res = requests.get(external_url, params={"api_key": tmdb_api_key})
+        external_url = EXTERNAL_IDS_URL.format(media_type=media_type, tmdb_id=tmdb_id)
+        ext_res = requests.get(external_url, params={"api_key": TMDB_API_KEY})
         ext_res.raise_for_status()
-        imdb_id = ext_res.json().get("imdb_id", "tt0000000")
-
-        return imdb_id
+        return ext_res.json().get("imdb_id", "tt0000000")
     except Exception as e:
-        print(f"❌ IMDb ID alınırken hata: {e}")
+        print(f"❌ IMDb ID alınırken hata ({title}): {str(e)}")
         return "tt0000000"
 
 def push_favorites_to_github():
@@ -68,12 +72,10 @@ def push_favorites_to_github():
         "Accept": "application/vnd.github.v3+json"
     }
 
-    # Dosya içeriğini oku ve base64 encode et
     with open("favorites.json", "rb") as f:
         content = f.read()
     encoded_content = base64.b64encode(content).decode("utf-8")
 
-    # Mevcut dosya bilgisi (SHA) alınmalı
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         sha = response.json()["sha"]
@@ -101,24 +103,25 @@ def push_favorites_to_github():
         except:
             st.write("Yanıt alınamadı.")
 
-from firebase_setup import get_firestore
-db = get_firestore()
-from tmdb import search_movie, search_tv, search_by_actor
-
 def create_favorites_json():
-    """Firestore'dan verileri çekip favorites.json dosyasını oluşturur"""
+    """Firestore'dan verileri çekip IMDb ID'leri düzeltilmiş favorites.json oluşturur"""
     try:
-        favorites_data = {
-            "movies": [],
-            "shows": []
-        }
-
+        favorites_data = {"movies": [], "shows": []}
+        
         for doc in db.collection("favorites").stream():
             item = doc.to_dict()
             
-            # Sayısal IMDb değerlerini temizle
-            if isinstance(item.get("imdb"), (int, float)):
-                item["imdb"] = ""
+            # Eksik/geçersiz IMDb ID varsa yeniden al
+            if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000":
+                is_series = item.get("type", "").lower() in ["show", "series"]
+                item["imdb"] = get_imdb_id(
+                    title=item["title"],
+                    poster_url=item.get("poster", ""),
+                    year=item.get("year"),
+                    is_series=is_series
+                )
+                time.sleep(0.1)  # API rate limit için
+                db.collection("favorites").document(doc.id).update({"imdb": item["imdb"]})
             
             if item["type"] == "movie":
                 favorites_data["movies"].append(item)
@@ -127,10 +130,9 @@ def create_favorites_json():
 
         with open("favorites.json", "w", encoding="utf-8") as f:
             json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-        
         return True
     except Exception as e:
-        st.error(f"❌ favorites.json oluşturulurken hata: {e}")
+        st.error(f"❌ favorites.json oluşturulamadı: {str(e)}")
         return False
 
 def sync_with_firebase():
@@ -138,48 +140,31 @@ def sync_with_firebase():
     movies = []
     series = []
     
-    # Firestore'dan tüm favorileri çek
     for doc in db.collection("favorites").stream():
         item = doc.to_dict()
             
-        # Eksik/geçersiz IMDb ID varsa yeniden al (sayısal puanları temizle)
-        if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)):
+        if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000":
             is_series = item.get("type", "").lower() in ["show", "series"]
-            imdb_id = get_imdb_id_from_tmdb(
+            imdb_id = get_imdb_id(
                 item["title"],
+                item.get("poster", ""),
                 item.get("year"),
-                is_series,
-                item.get("poster", "")
+                is_series
             )
             item["imdb"] = imdb_id
             db.collection("favorites").document(doc.id).update({"imdb": imdb_id})
+            time.sleep(0.1)
 
         if item["type"] == "movie":
             movies.append(item)
         else:
             series.append(item)
 
-    # favorites.json'a yaz
-    favorites_data = {"movies": movies, "shows": series}
     with open("favorites.json", "w", encoding="utf-8") as f:
-        json.dump(favorites_data, f, ensure_ascii=False, indent=4)
+        json.dump({"movies": movies, "shows": series}, f, ensure_ascii=False, indent=4)
     st.session_state["favorite_movies"] = movies
     st.session_state["favorite_series"] = series
     st.success("✅ favorites.json güncellendi ve IMDb ID'ler düzeltildi.")
-
-# Ana işlem akışı
-if __name__ == "__main__":
-    # Firestore bağlantısını kur
-    db = get_firestore()
-    
-    # favorites.json dosyasını oluştur
-    if create_favorites_json():
-        st.success("✅ favorites.json dosyası başarıyla oluşturuldu.")
-        
-        # GitHub'a push et
-        push_favorites_to_github()
-    else:
-        st.error("❌ favorites.json oluşturulamadı!")
 
 # Streamlit Arayüzü
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
@@ -330,3 +315,11 @@ if st.button("🔝 Go to Top Again"):
     st.rerun()
 
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
+
+# Ana işlem akışı
+if __name__ == "__main__":
+    db = get_firestore()
+    if create_favorites_json():
+        print("✅ favorites.json başarıyla oluşturuldu!")
+    else:
+        print("❌ favorites.json oluşturulamadı!")
