@@ -38,11 +38,8 @@ if os.path.exists(FAVORITES_FILE):
         favorites[key] = cleaned
         # CineSelect puanına göre (büyükten küçüğe), sonra yıl ve başlığa göre sırala
         favorites[key].sort(
-            key=lambda x: (
-                -(int(x.get("cineselectRating", 0) or 0)),
-                -(int(str(x.get("year", "0"))[:4] or 0)),
-                x.get("title", "").lower()
-            )
+            key=lambda x: int(x.get("cineselectRating", 0) or 0),
+            reverse=True
         )
 # IMDb ID'si eksik olanları TMDB'den otomatik doldur
 updated_count = 0
@@ -73,11 +70,8 @@ for key in ["movies", "series"]:
 # Temizleme + sıralama sonrası favorites.json'u her koşulda yaz
 for key in ["movies", "series"]:
     favorites[key].sort(
-        key=lambda x: (
-            -(int(x.get("cineselectRating", 0) or 0)),
-            -(int(str(x.get("year", "0"))[:4] or 0)),
-            x.get("title", "").lower()
-        )
+        key=lambda x: int(x.get("cineselectRating", 0) or 0),
+        reverse=True
     )
 with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
     json.dump(favorites, f, ensure_ascii=False, indent=4)
