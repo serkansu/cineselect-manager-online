@@ -223,10 +223,24 @@ if st.button("📊 Favori Sayılarını Göster"):
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
 
+# ---- Safe clear for search widgets (avoid modifying after instantiation)
+if "clear_search" not in st.session_state:
+    st.session_state.clear_search = False
+
+if st.session_state.clear_search:
+    # reset the flag and clear both the input widget's value and the session copy
+    st.session_state.clear_search = False
+    st.session_state["query_input"] = ""
+    st.session_state.query = ""
+
 if "query" not in st.session_state:
     st.session_state.query = ""
 
-query = st.text_input(f"🔍 Search for a {media_type.lower()}", value=st.session_state.query, key="query_input")
+query = st.text_input(
+    f"🔍 Search for a {media_type.lower()}",
+    value=st.session_state.query,
+    key="query_input",
+)
 
 if query:
     st.session_state.query = query
@@ -325,9 +339,8 @@ if query:
                     rt_score=rt_score,
                 )
                 st.success(f"✅ {item['title']} added to favorites!")
-                # clear the search boxes so results collapse
-                st.session_state["query_input"] = ""
-                st.session_state.query = ""
+                # clear search on next run to avoid "modified after instantiation" error
+                st.session_state.clear_search = True
                 st.rerun()
 
 st.divider()
