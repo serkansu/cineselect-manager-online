@@ -762,15 +762,15 @@ def show_favorites(fav_type, label):
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites_sorted):
         # Ağ çağrısı yok: önce DB’deki sayısal değerleri kullan
-imdb_num = _as_float(fav.get("imdb", 0))
-imdb_display = f"{imdb_num:.1f}" if imdb_num > 0 else "N/A"
+        imdb_num = _as_float(fav.get("imdb", 0))
+        imdb_display = f"{imdb_num:.1f}" if imdb_num > 0 else "N/A"
 
-# RT yüzdeyi int'e çevir (string gelse bile)
-try:
-    rt_num = int(float(fav.get("rt", 0) or 0))
-except Exception:
-    rt_num = 0
-rt_display = f"{rt_num}%" if rt_num > 0 else "N/A"
+        # RT yüzdeyi int'e çevir (string gelse bile)
+        try:
+            rt_num = int(float(fav.get("rt", 0) or 0))
+        except Exception:
+            rt_num = 0
+        rt_display = f"{rt_num}%" if rt_num > 0 else "N/A"
         
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
