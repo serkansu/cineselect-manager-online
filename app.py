@@ -1,3 +1,4 @@
+from tmdb import search_movie, search_tv, search_by_actor
 from omdb import get_ratings
 import csv
 from pathlib import Path
@@ -218,8 +219,8 @@ def show_favorites_count():
     series_count = len(list(series_docs))
 
     st.info(f"🎬 Favorite Movies: {movie_count} | 📺 Favorite TV Shows: {series_count}")
-    if st.button("📊 Favori Sayılarını Göster"):
-        show_favorites_count()
+if st.button("📊 Favori Sayılarını Göster"):
+    show_favorites_count()
 
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
@@ -290,7 +291,14 @@ if query:
                     "cineselectRating": manual_val,
                     "type": media_key,
                 })
-
+                # 4) seed_ratings.csv'ye (yoksa) ekle
+                append_seed_rating(
+                    imdb_id=imdb_id,
+                    title=item["title"],
+                    year=item.get("year"),
+                    imdb_rating=imdb_rating,
+                    rt_score=rt_score,
+                )
                 st.success(f"✅ {item['title']} added to favorites!")
                 st.session_state.query = ""
                 st.rerun()
@@ -318,7 +326,7 @@ def show_favorites(fav_type, label):
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
-        imdb_display = f"{fav['imdb']:.1f}" if isinstance(fav["imdb"], (int, float)) else "N/A"
+        imdb_display = f"{float(fav.get('imdbRating', 0) or 0):.1f}" if (fav.get("imdbRating") not in (None, "", "N/A")) else "N/A"
         rt_display = f"{fav['rt']}%" if isinstance(fav["rt"], (int, float)) else "N/A"
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
