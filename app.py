@@ -9,7 +9,7 @@ import time
 # --- OMDb (IMDb & Rotten Tomatoes) ---
 OMDB_API_KEY = os.getenv("OMDB_API_KEY", "")
 _omdb_cache = {}  # { "tt0105323": {"imdb": 8.0, "rt": 92} }
-
+@st.cache_data(show_spinner=False, ttl=60*60*24)  # 24 saat cache
 def fetch_ratings_from_omdb(imdb_id: str):
     """IMDb ID ('tt...') ver, IMDb puanı (float) ve RT yüzdesi (int) döndür."""
     if not imdb_id or not isinstance(imdb_id, str) or not imdb_id.startswith("tt"):
@@ -619,11 +619,11 @@ sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], ind
 def get_sort_key(fav):
     try:
         if sort_option == "IMDb":
-            _, _, imdb_f, _ = resolve_ratings_for_item(fav)
-            return float(imdb_f or 0.0)
+            val = fav.get("imdb")
+            return float(val) if isinstance(val, (int, float)) else 0.0
         elif sort_option == "RT":
-            _, _, _, rt_i = resolve_ratings_for_item(fav)
-            return float(rt_i or 0.0)
+            val = fav.get("rt")
+            return float(val) if isinstance(val, (int, float)) else 0.0
         elif sort_option == "CineSelect":
             return fav.get("cineselectRating", 0)
         elif sort_option == "Year":
