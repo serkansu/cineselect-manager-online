@@ -276,32 +276,36 @@ if query:
                         is_series=(media_key == "show"),
                 )
 
-                # 2) IMDb/RT puanlarını getir (önce CSV/ID, yoksa başlık+yıl ile OMDb)
+                # 2) IMDb/RT puanlarını getir (önce CSV, yoksa OMDb (ID), o da yoksa title+year)
                 stats = {}
+                raw_id = {}
+                raw_title = {}
+
                 if imdb_id:
                     stats = get_ratings(imdb_id) or {}
+                    # get_ratings, CSV/ID yolundan dönen ham OMDb cevabını `raw` içinde taşıyabilir
+                    raw_id = (stats.get("raw") or {})
 
-                if not stats:
-                    # TMDB dış ID bulunamadıysa veya OMDb ID ile çekemediyse
-                    ir, rt = fetch_ratings(item["title"], item.get("year"))
+                # Eğer CSV/ID'den veri yoksa veya gelen değerler 0/None ise başlık+yıl ile dene
+                if (not stats) or ((stats.get("imdb_rating") in (None, 0, "N/A")) and (stats.get("rt") in (None, 0, "N/A"))):
+                    ir, rt, raw_title = fetch_ratings(item["title"], item.get("year"))
                     stats = {"imdb_rating": ir, "rt": rt}
 
                 imdb_rating = float(stats.get("imdb_rating") or 0.0)
                 rt_score    = int(stats.get("rt") or 0)
-                # Kaynağı belirle
-                if imdb_id and SEED_PATH.exists():
-                    with SEED_PATH.open(newline="", encoding="utf-8") as f:
-                        csv_data = list(csv.DictReader(f))
-                        csv_ids = [row.get("imdb_id") for row in csv_data]
-                        if imdb_id in csv_ids:
-                            source = "📂 CSV'den alındı"
-                        else:
-                            source = "🌐 OMDb/TMDb'den alındı"
-                else:
-                    source = "🌐 OMDb/TMDb'den alındı"
 
-                # Ekrana bilgi yazdır
-                st.write(f"{source} | 🆔 IMDb ID: {imdb_id} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
+                # 🔎 DEBUG: Kaynak ve ham yanıtlar
+                source = "CSV/OMDb-ID" if raw_id else ("OMDb-title" if raw_title else "CSV")
+                st.write(f"🔍 Source: {source} | 🆔 IMDb ID: {imdb_id or '—'} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
+
+                if raw_id:
+                    import json as _json
+                    st.caption("OMDb by ID (raw JSON)")
+                    st.code(_json.dumps(raw_id, ensure_ascii=False, indent=2))
+                if raw_title:
+                    import json as _json
+                    st.caption("OMDb by title (raw JSON)")
+                    st.code(_json.dumps(raw_title, ensure_ascii=False, indent=2))
                 # 3) Firestore'a yaz
                 db.collection("favorites").document(item["id"]).set({
                     "id": item["id"],
