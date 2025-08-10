@@ -76,41 +76,52 @@ def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     imdb_id = external_response.json().get("imdb_id", "")
     return imdb_id or ""
 def push_favorites_to_github():
+    """Push favorites.json and seed_ratings.csv to their respective GitHub repos.
+    - favorites.json  -> serkansu/cineselect-addon
+    - seed_ratings.csv -> serkansu/cineselect-manager-online
+    """
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
         st.warning("⚠️ GITHUB_TOKEN environment variable is missing!")
         st.error("❌ GitHub token bulunamadı. Environment variable ayarlanmalı.")
         return
 
-    repo_owner = "serkansu"
-    repo_name = "cineselect-addon"
-    files_to_push = ["favorites.json", "seed_ratings.csv"]
+    # Which file goes to which repo
+    publish_plan = [
+        {"file": "favorites.json", "owner": "serkansu", "repo": "cineselect-addon"},
+        {"file": "seed_ratings.csv", "owner": "serkansu", "repo": "cineselect-manager-online"},
+    ]
+
     headers = {
         "Authorization": f"token {github_token}",
         "Accept": "application/vnd.github.v3+json",
     }
 
-    for file_path in files_to_push:
+    for item in publish_plan:
+        file_path = item["file"]
+        repo_owner = item["owner"]
+        repo_name = item["repo"]
         commit_message = f"Update {file_path} via Streamlit sync"
         url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
 
-        # Dosya içeriğini oku ve base64 encode et
+        # Read file to upload; skip if missing
         try:
             with open(file_path, "rb") as f:
                 content = f.read()
         except FileNotFoundError:
-            # dosya yoksa atla
+            st.warning(f"⚠️ Dosya bulunamadı, atlandı: {file_path}")
             continue
+
         encoded_content = base64.b64encode(content).decode("utf-8")
 
-        # Mevcut dosya bilgisi (SHA) alınmalı
+        # Get current SHA if file exists
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             sha = response.json().get("sha")
         elif response.status_code == 404:
             sha = None
         else:
-            st.error(f"❌ GitHub API erişim hatası ({file_path}): {response.status_code}")
+            st.error(f"❌ GitHub API erişim hatası ({file_path} → {repo_owner}/{repo_name}): {response.status_code}")
             try:
                 st.code(response.json())
             except Exception:
@@ -127,13 +138,13 @@ def push_favorites_to_github():
 
         put_response = requests.put(url, headers=headers, json=payload)
         if put_response.status_code not in (200, 201):
-            st.error(f"❌ Push başarısız ({file_path}): {put_response.status_code}")
+            st.error(f"❌ Push başarısız ({file_path} → {repo_owner}/{repo_name}): {put_response.status_code}")
             try:
                 st.code(put_response.json())
             except Exception:
                 pass
         else:
-            st.success(f"✅ GitHub'a push edildi: {file_path}")
+            st.success(f"✅ Push OK: {file_path} → {repo_owner}/{repo_name}")
 import streamlit as st
 from firebase_setup import get_firestore
 def fix_invalid_imdb_ids(data):
