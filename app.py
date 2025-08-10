@@ -732,21 +732,3 @@ if st.button("🔝 Go to Top Again"):
     st.rerun()
 
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
-
-# Ana işlem akışı
-#if __name__ == "__main__":
-#    try:
-#        from streamlit.web import cli as stcli
-#    except ImportError:
-import streamlit.cli as stcli
-#import sys  # ← burası dışarıda olmalı
-
-#def main():
-    # Firebase bağlantısını ve JSON'u oluştur
-#    db = get_firestore()
-#    if create_favorites_json():
-#        print("✅ favorites.json oluşturuldu!")
-#    else:
-#        print("❌ Hata!")
-
-#main()
