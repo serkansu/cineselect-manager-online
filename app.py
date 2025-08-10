@@ -35,7 +35,7 @@ def fetch_ratings_from_omdb(imdb_id: str):
     # Limit / hata kontrolü
     if (r.status_code != 200) or ("Error" in data and "limit" in str(data.get("Error", "")).lower()):
         print(f"[OMDb] limit/status: {r.status_code} body={data}")
-        return {}
+        return {"imdb": 0.0, "rt": 0}
         
         # IMDb
         imdb_val = data.get("imdbRating")
@@ -58,9 +58,7 @@ def fetch_ratings_from_omdb(imdb_id: str):
         data = {"imdb": imdb_float, "rt": rt_pct}
         _omdb_cache[imdb_id] = data
         return data
-    except Exception:
-        return {"imdb": 0.0, "rt": 0}
-
+   
 def resolve_ratings_for_item(item: dict):
     """
     item['imdb'] sende çoğu kayıt için 'tt...' (IMDb ID).
