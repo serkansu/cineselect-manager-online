@@ -79,53 +79,61 @@ def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
         st.warning("⚠️ GITHUB_TOKEN environment variable is missing!")
-    if not github_token:
         st.error("❌ GitHub token bulunamadı. Environment variable ayarlanmalı.")
         return
 
     repo_owner = "serkansu"
     repo_name = "cineselect-addon"
-    file_path = "favorites.json"
-    commit_message = "Update favorites.json via Streamlit sync"
-
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
+    files_to_push = ["favorites.json", "seed_ratings.csv"]
     headers = {
         "Authorization": f"token {github_token}",
-        "Accept": "application/vnd.github.v3+json"
+        "Accept": "application/vnd.github.v3+json",
     }
 
-    # Dosya içeriğini oku ve base64 encode et
-    with open("favorites.json", "rb") as f:
-        content = f.read()
-    encoded_content = base64.b64encode(content).decode("utf-8")
+    for file_path in files_to_push:
+        commit_message = f"Update {file_path} via Streamlit sync"
+        url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
 
-    # Mevcut dosya bilgisi (SHA) alınmalı
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        sha = response.json()["sha"]
-    elif response.status_code == 404:
-        sha = None
-    else:
-        st.error(f"❌ GitHub API erişim hatası: {response.status_code}")
-        return
-
-    payload = {
-        "message": commit_message,
-        "content": encoded_content,
-        "branch": "main"
-    }
-    if sha:
-        payload["sha"] = sha
-
-    put_response = requests.put(url, headers=headers, json=payload)
-    if put_response.status_code in [200, 201]:
-        st.success("✅ GitHub'a başarılı şekilde push edildi.")
-    else:
-        st.error(f"❌ Push başarısız: {put_response.status_code}")
+        # Dosya içeriğini oku ve base64 encode et
         try:
-            st.code(put_response.json())
-        except:
-            st.write("Yanıt alınamadı.")
+            with open(file_path, "rb") as f:
+                content = f.read()
+        except FileNotFoundError:
+            # dosya yoksa atla
+            continue
+        encoded_content = base64.b64encode(content).decode("utf-8")
+
+        # Mevcut dosya bilgisi (SHA) alınmalı
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            sha = response.json().get("sha")
+        elif response.status_code == 404:
+            sha = None
+        else:
+            st.error(f"❌ GitHub API erişim hatası ({file_path}): {response.status_code}")
+            try:
+                st.code(response.json())
+            except Exception:
+                pass
+            continue
+
+        payload = {
+            "message": commit_message,
+            "content": encoded_content,
+            "branch": "main",
+        }
+        if sha:
+            payload["sha"] = sha
+
+        put_response = requests.put(url, headers=headers, json=payload)
+        if put_response.status_code not in (200, 201):
+            st.error(f"❌ Push başarısız ({file_path}): {put_response.status_code}")
+            try:
+                st.code(put_response.json())
+            except Exception:
+                pass
+        else:
+            st.success(f"✅ GitHub'a push edildi: {file_path}")
 import streamlit as st
 from firebase_setup import get_firestore
 def fix_invalid_imdb_ids(data):
@@ -174,6 +182,16 @@ def sync_with_firebase():
                 item["rt"] = int(rt_score) if rt_score is not None else 0
                 # ⬇️ YENİ: seed_ratings.csv’ye (yoksa) ekle
                 append_seed_rating(imdb_id, title, year, imdb_rating, rt_score)
+    # seed_ratings.csv içinde her favorinin olduğundan emin ol (CSV'de zaten varsa eklenmez)
+    for _section in ("movies", "shows"):
+        for _it in favorites_data.get(_section, []):
+            append_seed_rating(
+                imdb_id=_it.get("imdb"),
+                title=_it.get("title"),
+                year=_it.get("year"),
+                imdb_rating=_it.get("imdbRating"),
+                rt_score=_it.get("rt"),
+            )
     # Dışarı yazarken anahtar adını 'shows' -> 'series' olarak çevir
     output_data = {
         "movies": favorites_data.get("movies", []),
