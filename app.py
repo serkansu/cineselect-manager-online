@@ -10,6 +10,107 @@ from firebase_admin import credentials, firestore
 import json
 import os
 import time
+# ---------- Sorting helpers for Streamio export ----------
+ROMAN_MAP = {
+    "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
+}
+
+def _roman_to_int(s: str) -> int | None:
+    s = (s or "").strip().lower()
+    return ROMAN_MAP.get(s)
+
+import re
+_FRANCHISE_WORDS = {"the", "a", "an"}
+
+def _normalize_franchise(title: str) -> str:
+    """Get a coarse franchise/base name from a movie title.
+    Examples:
+      - "The Terminator" -> "terminator"
+      - "Terminator 2: Judgment Day" -> "terminator"
+      - "Back to the Future Part II" -> "back to the future"
+    This is a heuristic; it deliberately keeps it simple.
+    """
+    t = (title or "").lower()
+    # drop leading article
+    parts = t.split()
+    if parts and parts[0] in _FRANCHISE_WORDS and len(parts) > 1:
+        t = " ".join(parts[1:])
+    # keep text before a colon if it looks like a subtitle
+    t = t.split(":")[0]
+    # remove trailing sequel tokens like numbers/roman/"part X"
+    t = re.sub(r"\bpart\s+[ivx]+\b", "", t).strip()
+    t = re.sub(r"\bpart\s+\d+\b", "", t).strip()
+    t = re.sub(r"\b\d+\b", "", t).strip()
+    t = re.sub(r"\s+", " ", t)
+    return t
+
+def _parse_sequel_number(title: str) -> int:
+    """Try to extract sequel ordering number from a title.
+    Returns 0 if not detected (so originals come first).
+    Supports digits and roman numerals after words like 'part' or alone (e.g., 'Terminator 2').
+    """
+    t = (title or "").lower()
+    # "Part II" / "Part 2"
+    m = re.search(r"\bpart\s+([ivx]+|\d+)\b", t)
+    if m:
+        token = m.group(1)
+        if token.isdigit():
+            return int(token)
+        ri = _roman_to_int(token)
+        if ri:
+            return ri
+    # lone digits after the base word: e.g., "Terminator 2"
+    m = re.search(r"\b(\d+)\b", t)
+    if m:
+        try:
+            return int(m.group(1))
+        except Exception:
+            pass
+    # "II", "III" as standalone
+    m = re.search(r"\b([ivx]{1,4})\b", t)
+    if m:
+        ri = _roman_to_int(m.group(1))
+        if ri:
+            return ri
+    return 0
+
+def _compute_franchise_min_year(items: list[dict]) -> dict[str, int]:
+    """Return {base_name: min_year} for bases that have 2+ items in the list.
+    Non-numeric/missing years are ignored.
+    """
+    years_by_base: dict[str, list[int]] = {}
+    for it in items:
+        base = _normalize_franchise(it.get("title", ""))
+        try:
+            y = int(it.get("year") or 0)
+        except Exception:
+            y = 0
+        years_by_base.setdefault(base, []).append(y)
+    return {b: min([y for y in ys if isinstance(y, int)]) for b, ys in years_by_base.items() if len(ys) >= 2}
+
+def sort_media_for_export(items: list[dict], apply_franchise: bool = True) -> list[dict]:
+    """Sort newest->oldest by *group year* (franchise min-year if grouped),
+    then by sequel number (1,2,3…) inside the same franchise, otherwise by CineSelect.
+    """
+    items = list(items or [])
+    base_min_year = _compute_franchise_min_year(items) if apply_franchise else {}
+
+    def keyfn(it: dict):
+        # group year: min franchise year if franchise exists (2+ items), else own year
+        base = _normalize_franchise(it.get("title", ""))
+        try:
+            own_year = int(it.get("year") or 0)
+        except Exception:
+            own_year = 0
+        group_year = base_min_year.get(base, own_year)
+        # sequel number only meaningful if multiple in same base
+        sequel_no = _parse_sequel_number(it.get("title", "")) if base in base_min_year else 0
+        # tie-breaker by CineSelect rating (desc)
+        cs = it.get("cineselectRating") or 0
+        return (-group_year, base, sequel_no, -int(cs))
+
+    return sorted(items, key=keyfn)
+# ---------- /sorting helpers ----------
 # --- seed_ratings.csv için yol ve ekleme fonksiyonu ---
 SEED_PATH = Path(__file__).parent / "seed_ratings.csv"
 
@@ -203,10 +304,14 @@ def sync_with_firebase():
                 imdb_rating=_it.get("imdbRating"),
                 rt_score=_it.get("rt"),
             )
+    # ---- Apply export ordering
+    sorted_movies = sort_media_for_export(favorites_data.get("movies", []), apply_franchise=True)
+    sorted_series = sort_media_for_export(favorites_data.get("shows", []), apply_franchise=False)
+
     # Dışarı yazarken anahtar adını 'shows' -> 'series' olarak çevir
     output_data = {
-        "movies": favorites_data.get("movies", []),
-        "series": favorites_data.get("shows", []),
+        "movies": sorted_movies,
+        "series": sorted_series,
     }
     with open("favorites.json", "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=4)
