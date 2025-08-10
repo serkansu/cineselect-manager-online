@@ -615,26 +615,30 @@ if query:
 st.divider()
 st.subheader("❤️ Your Favorites")
 sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], index=2)
-# --- Yardımcı fonksiyonlar ---
+# Yardımcı: string sayıları da çevir
 def _as_float(x):
     try:
+        if isinstance(x, str):
+            x = x.replace(",", ".").strip()
         return float(x)
     except Exception:
         return 0.0
+
 def get_sort_key(fav):
     try:
         if sort_option == "IMDb":
-            val = fav.get("imdb")
-            return float(val) if isinstance(val, (int, float)) else 0.0
+            v = fav.get("imdb")
+            if isinstance(v, str) and v.startswith("tt"):
+                return 0.0
+            return _as_float(v)
         elif sort_option == "RT":
-            val = fav.get("rt")
-            return float(val) if isinstance(val, (int, float)) else 0.0
+            return _as_float(fav.get("rt"))
         elif sort_option == "CineSelect":
-            return fav.get("cineselectRating", 0)
+            return _as_float(fav.get("cineselectRating"))
         elif sort_option == "Year":
-            return int(fav.get("year", 0))
+            return int(fav.get("year", 0) or 0)
     except:
-        return 0
+        return 0.0a
 
 def show_favorites(fav_type, label):
     global db
