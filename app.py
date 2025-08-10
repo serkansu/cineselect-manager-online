@@ -615,7 +615,12 @@ if query:
 st.divider()
 st.subheader("❤️ Your Favorites")
 sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], index=2)
-    
+# --- Yardımcı fonksiyonlar ---
+def _as_float(x):
+    try:
+        return float(x)
+    except Exception:
+        return 0.0
 def get_sort_key(fav):
     try:
         if sort_option == "IMDb":
@@ -693,10 +698,11 @@ def show_favorites(fav_type, label):
             st.success(f"Backfill tamamlandı. Güncellenen kayıt: {done}/{total}. Lütfen yenileyin.")
             st.rerun()
     docs = db.collection("favorites").where("type", "==", fav_type).stream()
-    favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
+    favorites = [doc.to_dict() for doc in docs]
+    favorites_sorted = sorted(favorites, key=get_sort_key, reverse=True)
 
     st.markdown(f"### 📁 {label}")
-    for idx, fav in enumerate(favorites):
+    for idx, fav in enumerate(favorites_sorted):
         # Eksik veriler için kontrol ekleyin
         imdb_display, rt_display, _, _ = resolve_ratings_for_item(fav)
         
