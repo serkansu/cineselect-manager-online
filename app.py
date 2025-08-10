@@ -145,6 +145,38 @@ def append_seed_rating(imdb_id, title, year, imdb_rating, rt_score):
             (rt_score if rt_score is not None else ""),
         ])
 # --- /seed ekleme fonksiyonu ---
+
+# --- seed okuma fonksiyonu ---
+def read_seed_rating(imdb_id: str):
+    """seed_ratings.csv içinden imdb_id ile eşleşen satırı döndürür.
+    {'imdb_rating': float|None, 'rt': int|None} şeklinde veri verir; bulunamazsa None döner.
+    Hem 'imdb_id' hem de 'imdb' sütun adlarını destekler.
+    """
+    try:
+        iid = (imdb_id or "").strip()
+        if not iid or not SEED_PATH.exists():
+            return None
+        with SEED_PATH.open(newline="", encoding="utf-8") as f:
+            r = csv.DictReader(f)
+            for row in r:
+                key = (row.get("imdb_id") or row.get("imdb") or "").strip()
+                if key == iid:
+                    # değerleri temizle
+                    ir = row.get("imdb_rating")
+                    rt = row.get("rt")
+                    try:
+                        ir_val = float(ir) if ir not in (None, "", "N/A") else None
+                    except Exception:
+                        ir_val = None
+                    try:
+                        rt_val = int(float(rt)) if rt not in (None, "", "N/A") else None
+                    except Exception:
+                        rt_val = None
+                    return {"imdb_rating": ir_val, "rt": rt_val}
+    except Exception:
+        pass
+    return None
+# --- /seed okuma fonksiyonu ---
 def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     tmdb_api_key = os.getenv("TMDB_API_KEY")
     if not tmdb_api_key:
@@ -453,27 +485,37 @@ if query:
                         is_series=(media_key == "show"),
                 )
 
-                # 2) IMDb/RT puanlarını getir (önce CSV, yoksa OMDb (ID), o da yoksa title+year)
+                # 2) IMDb/RT puanlarını getir (ÖNCE yerel CSV, yoksa OMDb-ID, o da yoksa Title/Year)
                 stats = {}
                 raw_id = {}
                 raw_title = {}
+                source = None
 
-                if imdb_id:
-                    stats = get_ratings(imdb_id) or {}
-                    # get_ratings, CSV/ID yolundan dönen ham OMDb cevabını `raw` içinde taşıyabilir
-                    raw_id = (stats.get("raw") or {})
+                # a) yerel CSV
+                seed_hit = read_seed_rating(imdb_id)
+                if seed_hit and (seed_hit.get("imdb_rating") or seed_hit.get("rt")):
+                    stats = {"imdb_rating": seed_hit.get("imdb_rating"), "rt": seed_hit.get("rt")}
+                    source = "CSV"
 
-                # Eğer CSV/ID'den veri yoksa veya gelen değerler 0/None ise başlık+yıl ile dene
-                if (not stats) or ((stats.get("imdb_rating") in (None, 0, "N/A")) and (stats.get("rt") in (None, 0, "N/A"))):
+                # b) CSV yoksa/eksikse OMDb by ID
+                if not source:
+                    if imdb_id:
+                        stats = get_ratings(imdb_id) or {}
+                        raw_id = (stats.get("raw") or {})
+                        source = "CSV/OMDb-ID" if raw_id else None  # get_ratings CSV'den dönerse raw boş kalabilir
+
+                # c) hâlâ boşsa OMDb by Title/Year
+                if not stats or ((stats.get("imdb_rating") in (None, 0, "N/A")) and (stats.get("rt") in (None, 0, "N/A"))):
                     ir, rt, raw_title = fetch_ratings(item["title"], item.get("year"))
                     stats = {"imdb_rating": ir, "rt": rt}
+                    if not source:
+                        source = "OMDb-title"
 
                 imdb_rating = float(stats.get("imdb_rating") or 0.0)
                 rt_score    = int(stats.get("rt") or 0)
 
                 # 🔎 DEBUG: Kaynak ve ham yanıtlar
-                source = "CSV/OMDb-ID" if raw_id else ("OMDb-title" if raw_title else "CSV")
-                st.write(f"🔍 Source: {source} | 🆔 IMDb ID: {imdb_id or '—'} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
+                st.write(f"🔍 Source: {source or '—'} | 🆔 IMDb ID: {imdb_id or '—'} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
 
                 # Extra, user-visible diagnostics
                 error_msg = None
