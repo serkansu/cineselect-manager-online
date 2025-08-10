@@ -6,7 +6,84 @@ import json
 import base64
 import os
 import time
+# --- OMDb (IMDb & Rotten Tomatoes) ---
+OMDB_API_KEY = os.getenv("OMDB_API_KEY", "")
+_omdb_cache = {}  # { "tt0105323": {"imdb": 8.0, "rt": 92} }
 
+def fetch_ratings_from_omdb(imdb_id: str):
+    """IMDb ID ('tt...') ver, IMDb puanı (float) ve RT yüzdesi (int) döndür."""
+    if not imdb_id or not isinstance(imdb_id, str) or not imdb_id.startswith("tt"):
+        return {"imdb": 0.0, "rt": 0}
+
+    if imdb_id in _omdb_cache:
+        return _omdb_cache[imdb_id]
+
+    if not OMDB_API_KEY:
+        data = {"imdb": 0.0, "rt": 0}
+        _omdb_cache[imdb_id] = data
+        return data
+
+    try:
+        url = f"https://www.omdbapi.com/?i={imdb_id}&apikey={OMDB_API_KEY}&tomatoes=true"
+        r = requests.get(url, timeout=6)
+        r.raise_for_status()
+        j = r.json()
+
+        # IMDb
+        imdb_val = j.get("imdbRating")
+        try:
+            imdb_float = float(imdb_val) if imdb_val and imdb_val != "N/A" else 0.0
+        except Exception:
+            imdb_float = 0.0
+
+        # Rotten Tomatoes (OMDb Patreon anahtarı yoksa çoğu zaman gelmez)
+        rt_pct = 0
+        for x in j.get("Ratings", []):
+            if x.get("Source") == "Rotten Tomatoes":
+                v = x.get("Value")  # "92%" gibi
+                try:
+                    rt_pct = int(str(v).replace("%", "")) if v and v != "N/A" else 0
+                except Exception:
+                    rt_pct = 0
+                break
+
+        data = {"imdb": imdb_float, "rt": rt_pct}
+        _omdb_cache[imdb_id] = data
+        return data
+    except Exception:
+        return {"imdb": 0.0, "rt": 0}
+
+def resolve_ratings_for_item(item: dict):
+    """
+    item['imdb'] sende çoğu kayıt için 'tt...' (IMDb ID).
+    Eğer zaten puan (float) ise onu kullan; 'tt...' ise OMDb'dan çek.
+    Döndürür: (imdb_display_str, rt_display_str, imdb_float, rt_int)
+    """
+    imdb_display, rt_display = "N/A", "N/A"
+    imdb_float, rt_int = 0.0, 0
+
+    val = item.get("imdb")
+
+    # imdb alanı puan olarak tutulmuşsa
+    if isinstance(val, (int, float)):
+        imdb_float = float(val)
+        imdb_display = f"{imdb_float:.1f}" if imdb_float > 0 else "N/A"
+
+    # imdb alanı 'tt...' ise OMDb'dan çek
+    elif isinstance(val, str) and val.startswith("tt"):
+        ratings = fetch_ratings_from_omdb(val)
+        imdb_float = ratings["imdb"]
+        rt_int = ratings["rt"]
+        imdb_display = f"{imdb_float:.1f}" if imdb_float > 0 else "N/A"
+        rt_display = f"{rt_int}%" if rt_int > 0 else "N/A"
+
+    # item['rt'] sayısal ise onu tercih et (favorilerde önceden yazılmış olabilir)
+    if rt_display == "N/A":
+        if isinstance(item.get("rt"), (int, float)) and item["rt"] > 0:
+            rt_int = int(item["rt"])
+            rt_display = f"{rt_int}%"
+
+    return imdb_display, rt_display, imdb_float, rt_int
 # Firebase yapılandırması
 def get_firestore():
     if not firebase_admin._apps:
@@ -505,7 +582,7 @@ if query:
                 st.image(item["poster"], width=180)
 
             st.markdown(f"**{idx+1}. {item['title']} ({item['year']})**")
-            imdb_display = f"{item['imdb']:.1f}" if isinstance(item['imdb'], (int, float)) and item['imdb'] > 0 else "N/A"
+            imdb_display, rt_display, imdb_f, rt_i = resolve_ratings_for_item(item)
             rt_display = f"{item['rt']}%" if isinstance(item['rt'], (int, float)) and item['rt'] > 0 else "N/A"
             st.markdown(f"⭐ IMDb: {imdb_display} &nbsp;&nbsp; 🍅 RT: {rt_display}", unsafe_allow_html=True)
 
@@ -515,20 +592,25 @@ if query:
             manual_val = st.number_input("Manual value:", min_value=1, max_value=10000, value=slider_val, step=1, key=manual_key)
 
             if st.button("Add to Favorites", key=f"btn_{item['id']}"):
+            # IMDb/RT puanlarını hazırla (imdb alanı 'tt...' ise OMDb'dan çeker)
+                imdb_d, rt_d, imdb_f, rt_i = resolve_ratings_for_item(item)
                 media_key = "movie" if media_type == "Movie" else ("show" if media_type == "TV Show" else "movie")
                 db.collection("favorites").document(item["id"]).set({
                     "id": item["id"],
                     "title": item["title"],
                     "year": item["year"],
-                    "imdb": item["imdb"],
                     "poster": item["poster"],
-                    "rt": item["rt"],
+                    "type": media_key,
                     "cineselectRating": manual_val,
-                    "type": media_key
-                })
-                st.success(f"✅ {item['title']} added to favorites!")
-                st.session_state.query = ""
-                st.rerun()
+                    # --- puanlar ---
+                    "imdb": float(imdb_f or 0),  # IMDb puanı (float)
+                    "rt": int(rt_i or 0),        # RT yüzdesi (int, yoksa 0)
+                    # IMDb ID'yi ayrıca sakla (sonradan güncelleme/backfill için)
+                    "imdb_id": (
+                        item["imdb"] if isinstance(item.get("imdb"), str) and item["imdb"].startswith("tt")
+                        else item.get("imdb_id", "")
+                    )
+                }, merge=True)
 
 st.divider()
 st.subheader("❤️ Your Favorites")
@@ -537,9 +619,11 @@ sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], ind
 def get_sort_key(fav):
     try:
         if sort_option == "IMDb":
-            return float(fav.get("imdb", 0))
+            _, _, imdb_f, _ = resolve_ratings_for_item(fav)
+            return float(imdb_f or 0.0)
         elif sort_option == "RT":
-            return float(fav.get("rt", 0))
+            _, _, _, rt_i = resolve_ratings_for_item(fav)
+            return float(rt_i or 0.0)
         elif sort_option == "CineSelect":
             return fav.get("cineselectRating", 0)
         elif sort_option == "Year":
@@ -549,14 +633,72 @@ def get_sort_key(fav):
 
 def show_favorites(fav_type, label):
     global db
+
+    # Backfill butonu
+    if st.button("🔄 Backfill IMDb/RT Ratings", key=f"backfill_{fav_type}"):
+        # Ayarlar
+        MAX_UPDATES = 60          # tek tıklamada en fazla kaç kayıt güncellensin
+        BASE_DELAY  = 0.25        # her istek arası bekleme (sn)
+        RETRIES     = 3           # hata/429 için tekrar sayısı
+        BACKOFF_SEC = 5           # 429 gelince bekleme (sn)
+
+        # Veri seti
+        q = db.collection("favorites").where("type", "==", fav_type).stream()
+        items = [d.to_dict() for d in q]
+
+        # imdb_id bulma fonksiyonu
+        def pick_imdb_id(f):
+            if isinstance(f.get("imdb"), str) and f["imdb"].startswith("tt"):
+                return f["imdb"]
+            return f.get("imdb_id", "")
+
+        # Güncellenecek adaylar
+        candidates = []
+        for f in items:
+            imdb_id = pick_imdb_id(f)
+            if imdb_id:
+                if not isinstance(f.get("imdb"), (int, float)) or float(f.get("imdb") or 0) == 0 \
+                   or int(f.get("rt") or 0) == 0:
+                    candidates.append({"doc_id": f["id"], "imdb_id": imdb_id, "rt": f.get("rt", 0)})
+
+        total = min(len(candidates), MAX_UPDATES)
+        if total == 0:
+            st.info("Güncellenecek uygun kayıt yok.")
+        else:
+            prog = st.progress(0.0, text="OMDb'den puanlar çekiliyor…")
+            done = 0
+
+            for c in candidates[:MAX_UPDATES]:
+                # Retry/backoff döngüsü
+                for attempt in range(1, RETRIES + 1):
+                    try:
+                        _, _, imdb_f, rt_i = resolve_ratings_for_item({"imdb": c["imdb_id"], "rt": c["rt"]})
+                        db.collection("favorites").document(c["doc_id"]).update({
+                            "imdb": float(imdb_f or 0),
+                            "rt": int(rt_i or 0),
+                            "imdb_id": c["imdb_id"]
+                        })
+                        break  # retry döngüsünden çık
+                    except Exception as e:
+                        msg = str(e)
+                        time.sleep(BACKOFF_SEC if ("429" in msg or "Too Many" in msg) else 1.5)
+                        if attempt == RETRIES:
+                            st.write(f"⚠️ {c['doc_id']} güncellenemedi: {msg}")
+
+                done += 1
+                prog.progress(done / total)
+                time.sleep(BASE_DELAY)  # istekler arası kısa bekleme
+
+            prog.empty()
+            st.success(f"Backfill tamamlandı. Güncellenen kayıt: {done}/{total}. Lütfen yenileyin.")
+            st.rerun()
     docs = db.collection("favorites").where("type", "==", fav_type).stream()
     favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
         # Eksik veriler için kontrol ekleyin
-        imdb_display = f"{fav['imdb']:.1f}" if isinstance(fav.get("imdb"), (int, float)) else fav.get("imdb", "N/A")
-        rt_display = f"{fav['rt']}%" if isinstance(fav.get("rt"), (int, float)) else fav.get("rt", "N/A")
+        imdb_display, rt_display, _, _ = resolve_ratings_for_item(fav)
         
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
@@ -592,19 +734,19 @@ if st.button("🔝 Go to Top Again"):
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
 
 # Ana işlem akışı
-if __name__ == "__main__":
-    try:
-        from streamlit.web import cli as stcli
-    except ImportError:
+#if __name__ == "__main__":
+#    try:
+#        from streamlit.web import cli as stcli
+#    except ImportError:
         import streamlit.cli as stcli
-import sys  # ← burası dışarıda olmalı
+#import sys  # ← burası dışarıda olmalı
 
-def main():
+#def main():
     # Firebase bağlantısını ve JSON'u oluştur
-    db = get_firestore()
-    if create_favorites_json():
-        print("✅ favorites.json oluşturuldu!")
-    else:
-        print("❌ Hata!")
+#    db = get_firestore()
+#    if create_favorites_json():
+#        print("✅ favorites.json oluşturuldu!")
+#    else:
+#        print("❌ Hata!")
 
-main()
+#main()
