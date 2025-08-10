@@ -174,9 +174,14 @@ def sync_with_firebase():
                 item["rt"] = int(rt_score) if rt_score is not None else 0
                 # ⬇️ YENİ: seed_ratings.csv’ye (yoksa) ekle
                 append_seed_rating(imdb_id, title, year, imdb_rating, rt_score)
+    # Dışarı yazarken anahtar adını 'shows' -> 'series' olarak çevir
+    output_data = {
+        "movies": favorites_data.get("movies", []),
+        "series": favorites_data.get("shows", []),
+    }
     with open("favorites.json", "w", encoding="utf-8") as f:
-        json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-        st.write("🔍 FAVORITES DEBUG:", favorites_data)  # DEBUG SATIRI
+        json.dump(output_data, f, ensure_ascii=False, indent=4)
+        st.write("🔍 FAVORITES DEBUG (output):", output_data)
     st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
 
     # GitHub'a push et
