@@ -738,7 +738,7 @@ st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p
 #    try:
 #        from streamlit.web import cli as stcli
 #    except ImportError:
-        import streamlit.cli as stcli
+import streamlit.cli as stcli
 #import sys  # ← burası dışarıda olmalı
 
 #def main():
