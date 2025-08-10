@@ -9,6 +9,7 @@ import base64
 from firebase_admin import credentials, firestore
 import json
 import os
+import time
 # --- seed_ratings.csv için yol ve ekleme fonksiyonu ---
 SEED_PATH = Path(__file__).parent / "seed_ratings.csv"
 
@@ -310,6 +311,22 @@ if query:
                 source = "CSV/OMDb-ID" if raw_id else ("OMDb-title" if raw_title else "CSV")
                 st.write(f"🔍 Source: {source} | 🆔 IMDb ID: {imdb_id or '—'} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
 
+                # Extra, user-visible diagnostics
+                error_msg = None
+                if isinstance(raw_id, dict):
+                    error_msg = raw_id.get("Error")
+                if not error_msg and isinstance(raw_title, dict):
+                    error_msg = raw_title.get("Error")
+
+                if error_msg:
+                    st.error(f"OMDb error: {error_msg}. Check OMDB_API_KEY.", icon="🚨")
+                elif source == "CSV":
+                    st.info("Source: seed_ratings.csv (cached)", icon="📂")
+                elif source == "CSV/OMDb-ID":
+                    st.info(f"Source: OMDb by IMDb ID ({imdb_id})", icon="🔎")
+                else:
+                    st.info(f"Source: OMDb by Title/Year ({item['title']} {item.get('year')})", icon="🔎")
+
                 if raw_id:
                     import json as _json
                     st.caption("OMDb by ID (raw JSON)")
@@ -341,6 +358,9 @@ if query:
                 st.success(f"✅ {item['title']} added to favorites!")
                 # clear search on next run to avoid "modified after instantiation" error
                 st.session_state.clear_search = True
+                # Let the user see the diagnostics before refresh
+                st.toast("Refreshing…", icon="🔄")
+                time.sleep(1.2)
                 st.rerun()
 
 st.divider()
