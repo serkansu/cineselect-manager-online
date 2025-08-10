@@ -638,7 +638,7 @@ def get_sort_key(fav):
         elif sort_option == "Year":
             return int(fav.get("year", 0) or 0)
     except:
-        return 0.0a
+        return 0.0
 
 def show_favorites(fav_type, label):
     global db
