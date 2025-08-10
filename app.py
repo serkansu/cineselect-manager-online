@@ -8,6 +8,7 @@ import firebase_admin
 import base64
 from firebase_admin import credentials, firestore
 import json
+import os
 # --- seed_ratings.csv için yol ve ekleme fonksiyonu ---
 SEED_PATH = Path(__file__).parent / "seed_ratings.csv"
 
@@ -73,7 +74,6 @@ def get_imdb_id_from_tmdb(title, year=None, is_series=False):
 
     imdb_id = external_response.json().get("imdb_id", "")
     return imdb_id or ""
-import os
 def push_favorites_to_github():
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
@@ -127,8 +127,6 @@ def push_favorites_to_github():
             st.write("Yanıt alınamadı.")
 import streamlit as st
 from firebase_setup import get_firestore
-from tmdb import search_movie, search_tv, search_by_actor  # Actor arama fonksiyonu eklendi
-import json
 def fix_invalid_imdb_ids(data):
     for section in ["movies", "shows"]:
         for item in data[section]:
@@ -327,6 +325,8 @@ if query:
                     rt_score=rt_score,
                 )
                 st.success(f"✅ {item['title']} added to favorites!")
+                # clear the search boxes so results collapse
+                st.session_state["query_input"] = ""
                 st.session_state.query = ""
                 st.rerun()
 
@@ -388,8 +388,3 @@ if st.button("🔝 Go to Top Again"):
 
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
 
-
-
-import os
-import base64
-import requests
