@@ -2,8 +2,13 @@
 import os, csv, requests
 from pathlib import Path
 
-# .env/Render yoksa şu fallback kullanılır (istersen boş bırak)
-OMDB_FALLBACK = os.getenv("OMDB_FALLBACK", "295944aa")
+# Ortam değişkenlerinden anahtar okuyan yardımcı (sabit key KULLANMA)
+def _api_key() -> str:
+    k = os.getenv("OMDB_API_KEY", "").strip()
+    if k:
+        return k
+    # yalnızca açıkça tanımlandıysa yedek anahtarı kullan
+    return os.getenv("OMDB_FALLBACK", "").strip()
 
 SEED_PATH = Path(__file__).parent / "seed_ratings.csv"
 
@@ -22,7 +27,7 @@ def _read_from_seed(imdb_id: str):
                     rt_score = int(rt) if rt and rt != "N/A" else None
                 except:
                     rt_score = None
-                return {"imdb_rating": imdb_rating, "rt": rt_score}
+                return {"imdb_rating": imdb_rating, "rt": rt_score, "raw": {"source": "csv"}}
     return None
 
 
@@ -41,9 +46,9 @@ def get_ratings(imdb_id: str):
         return seeded
 
     # 2) OMDb by ID
-    api_key = os.getenv("OMDB_API_KEY", OMDB_FALLBACK)
+    api_key = _api_key()
     if not api_key:
-        return {"imdb_rating": None, "rt": None}
+        return {"imdb_rating": None, "rt": None, "raw": {"error": "missing OMDB_API_KEY"}}
 
     try:
         r = requests.get(
@@ -58,12 +63,12 @@ def get_ratings(imdb_id: str):
         rt_pct = None
         for s in data.get("Ratings", []):
             if s.get("Source") == "Rotten Tomatoes":
-                rt_pct = s.get("Value")  # "92%"
+                rt_pct = s.get("Value")
                 break
         rt = int(rt_pct.strip("%")) if rt_pct and rt_pct.endswith("%") else None
         return {"imdb_rating": imdb_rating, "rt": rt, "raw": data}
-    except Exception:
-        return {"imdb_rating": None, "rt": None}
+    except Exception as e:
+        return {"imdb_rating": None, "rt": None, "raw": {"error": str(e)}}
 
 
 def fetch_ratings(title: str, year):
@@ -71,9 +76,9 @@ def fetch_ratings(title: str, year):
     IMDb ID bulunamazsa başlık+yıl ile OMDb'den dener.
     Dönüş: (imdb_rating: float, rt: int, raw: dict)
     """
-    api_key = os.getenv("OMDB_API_KEY", OMDB_FALLBACK)
+    api_key = _api_key()
     if not api_key:
-        return 0.0, 0, {}
+        return 0.0, 0, {"error": "missing OMDB_API_KEY"}
     try:
         r = requests.get(
             "https://www.omdbapi.com/",
@@ -90,5 +95,5 @@ def fetch_ratings(title: str, year):
                 break
         rt = int(rt_pct.strip("%")) if rt_pct and rt_pct.endswith("%") else None
         return imdb_rating or 0.0, rt or 0, data
-    except Exception:
-        return 0.0, 0, {}
+    except Exception as e:
+        return 0.0, 0, {"error": str(e)}
