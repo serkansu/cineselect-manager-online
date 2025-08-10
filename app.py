@@ -375,64 +375,69 @@ def push_favorites_to_github():
 def create_favorites_json():
     """Firestore'dan verileri çekip IMDb ID'leri düzeltilmiş favorites.json oluşturur"""
     favorites_data = {"movies": [], "series": []}
-        
+
     for doc in db.collection("favorites").stream():
         item = doc.to_dict()
-        # --- TYPE NORMALIZATION (fix trailing \n etc.) ---
+
+        # --- TYPE NORMALIZATION ---
         raw_type = str(item.get("type", item.get("media_type", ""))).strip().lower()
         if raw_type in ("movie", "film"):
             norm_type = "movie"
         elif raw_type in ("show", "tv", "series", "tvshow"):
             norm_type = "show"
         else:
-    # emin olamıyorsak default movie
+            # emin olamıyorsak default movie
             norm_type = "movie"
         item["type"] = norm_type
 
-# (İSTEĞE BAĞLI) Firebase içindeki kirli kaydı da düzelt:
+        # (İSTEĞE BAĞLI) Firebase içindeki kirli kaydı da düzelt
         try:
-            if item.get("type") != raw_type:  # ya da always normalize
+            if item.get("type") != raw_type:
                 db.collection("favorites").document(doc.id).update({"type": norm_type})
         except Exception:
             pass
-# --------------------------------------------------
-            # Eksik/geçersiz IMDb ID varsa yeniden al
-            if not item.get("imdb") or isinstance(item.get("imdb"), (int, float)) or item["imdb"] == "tt0000000":
-                is_series = item.get("type", "").lower() in ["show", "series"]
-                item["imdb"] = get_imdb_id(
-                    title=item["title"],
-                    poster_url=item.get("poster", ""),
-                    year=item.get("year"),
-                    is_series=is_series
-                )
-                time.sleep(0.1)  # API rate limit için
-                db.collection("favorites").document(doc.id).update({"imdb": item["imdb"]})
-            
-            exp = to_export_item(item)
-            if exp["type"] == "movie":
-                favorites_data["movies"].append(exp)
-            else:
-                favorites_data["series"].append(exp)
-        # --- sanitize before dump (force types & filter misplaced) ---
-        favorites_data["movies"] = [
-            {**it, "type": "movie"}
-            for it in favorites_data.get("movies", [])
-            if str(it.get("type","")).strip().lower() in ("movie", "")
-        ]
-        favorites_data["series"] = [
-            {**it, "type": "show"}
-            for it in favorites_data.get("series", [])
-            if str(it.get("type","")).strip().lower() in ("show", "tv", "series")
-        ]
-        # --------------------------------------------------------------
-    try:  # ← BUNU ekle (with ile aynı hizadan)
+
+        # --- BURASI EXCEPT'İN DIŞINDA OLMALI ---
+        # Eksik/geçersiz IMDb ID varsa yeniden al
+        if (
+            not item.get("imdb")
+            or isinstance(item.get("imdb"), (int, float))
+            or item.get("imdb") == "tt0000000"
+        ):
+            is_series = item.get("type", "").lower() in ["show", "series"]
+            item["imdb"] = get_imdb_id(
+                title=item.get("title", ""),
+                poster_url=item.get("poster", ""),
+                year=item.get("year", 0),
+                is_series=is_series,
+            )
+
+        # Export formatına çevir ve listeye ekle
+        exp = to_export_item(item)
+        if exp["type"] == "movie":
+            favorites_data["movies"].append(exp)
+        else:
+            favorites_data["series"].append(exp)
+
+    # --- Döngü BİTTİKTEN SONRA sanitize ---
+    favorites_data["movies"] = [
+        {**it, "type": "movie"}
+        for it in favorites_data.get("movies", [])
+        if str(it.get("type", "")).strip().lower() in ("movie", "")
+    ]
+    favorites_data["series"] = [
+        {**it, "type": "show"}
+        for it in favorites_data.get("series", [])
+        if str(it.get("type", "")).strip().lower() in ("show", "tv", "series")
+    ]
+
+    try:
         with open("favorites.json", "w", encoding="utf-8") as f:
             json.dump(favorites_data, f, ensure_ascii=False, indent=4)
-        return True  # with'ten çıktıktan sonra, ama try içinde
-    except Exception as e:  # ← try ile aynı hizadan
+        return True
+    except Exception as e:
         st.error(f"❌ favorites.json oluşturulamadı: {str(e)}")
         return False
-
 def sync_with_firebase(enrich=False, max_updates=50):
     db = get_firestore()
     movies = []
