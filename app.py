@@ -34,8 +34,8 @@ def fetch_ratings_from_omdb(imdb_id: str):
 
     # Limit / hata kontrolü
     if (r.status_code != 200) or ("Error" in data and "limit" in str(data.get("Error", "")).lower()):
-    print(f"[OMDb] limit/status: {r.status_code} body={data}")
-    return {}
+        print(f"[OMDb] limit/status: {r.status_code} body={data}")
+        return {}
         
         # IMDb
         imdb_val = data.get("imdbRating")
