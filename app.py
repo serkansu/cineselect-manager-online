@@ -23,14 +23,14 @@ def fetch_ratings_from_omdb(imdb_id: str):
         _omdb_cache[imdb_id] = data
         return data
 
-          url = f"https://www.omdbapi.com/?i={imdb_id}&apikey={OMDB_API_KEY}&tomatoes=true"
-        r = requests.get(url, timeout=6)  # OMDb API isteği
+    url = f"https://www.omdbapi.com/?i={imdb_id}&apikey={OMDB_API_KEY}&tomatoes=true"
+    r = requests.get(url, timeout=6)  # OMDb API isteği
 
-        # JSON parse güvenliği
-        try:
-            data = r.json()
-        except Exception:
-            data = {}
+    # JSON parse güvenliği
+    try:
+        data = r.json()
+    except Exception:
+        data = {}
 
     # Limit / hata kontrolü
     if (r.status_code != 200) or ("Error" in data and "limit" in str(data.get("Error", "")).lower()):
