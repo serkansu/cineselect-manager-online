@@ -8,7 +8,7 @@ import firebase_admin
 import base64
 from firebase_admin import credentials, firestore
 import json
-# --- seed_ratings.csv için yol ve ekleme fonksiyonu ---
+# --- seed__ratings.csv için yol ve ekleme fonksiyonu ---
 SEED_PATH = Path(__file__).parent / "seed_ratings.csv"
 
 def append_seed_rating(imdb_id, title, year, imdb_rating, rt_score):
