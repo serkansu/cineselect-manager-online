@@ -402,9 +402,15 @@ if query:
         for idx, item in enumerate(results):
             st.divider()
             if item.get("poster") and show_posters:
-                imdb_id_link = (item.get("imdb") or "").strip()
+                # Prefer an actual IMDb ID (e.g., "tt0133093"); fall back across common key variants
+                imdb_id_link = str(
+                    item.get("imdb")
+                    or item.get("imdb_id")
+                    or item.get("imdbID")
+                    or ""
+                ).strip()
                 poster_url = item["poster"]
-                if imdb_id_link and imdb_id_link.startswith("tt"):
+                if imdb_id_link.startswith("tt"):
                     st.markdown(
                         f'<a href="https://www.imdb.com/title/{imdb_id_link}/" target="_blank" rel="noopener">'
                         f'<img src="{poster_url}" width="180"/></a>',
@@ -413,9 +419,19 @@ if query:
                 else:
                     st.image(poster_url, width=180)
 
-            st.markdown(f"**{idx+1}. {item['title']} ({item['year']})**")
-            imdb_display = f"{item['imdb']:.1f}" if isinstance(item['imdb'], (int, float)) and item['imdb'] > 0 else "N/A"
-            rt_display = f"{item['rt']}%" if isinstance(item['rt'], (int, float)) and item['rt'] > 0 else "N/A"
+            st.markdown(f"**{idx+1}. {item['title']} ({item.get('year', '—')})**")
+
+            # IMDb rating display: prefer explicit imdbRating; if not present, use numeric `imdb` when it is a rating
+            _imdb_rating_field = item.get("imdbRating", None)
+            if isinstance(_imdb_rating_field, (int, float)):
+                imdb_display = f"{float(_imdb_rating_field):.1f}" if _imdb_rating_field > 0 else "N/A"
+            elif isinstance(item.get("imdb"), (int, float)):
+                imdb_display = f"{float(item['imdb']):.1f}" if item["imdb"] > 0 else "N/A"
+            else:
+                imdb_display = "N/A"
+
+            rt_val = item.get("rt", 0)
+            rt_display = f"{int(rt_val)}%" if isinstance(rt_val, (int, float)) and rt_val > 0 else "N/A"
             st.markdown(f"⭐ IMDb: {imdb_display} &nbsp;&nbsp; 🍅 RT: {rt_display}", unsafe_allow_html=True)
 
             slider_key = f"stars_{item['id']}"
@@ -539,7 +555,9 @@ def show_favorites(fav_type, label):
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
             if show_posters and fav.get("poster"):
-                imdb_id_link = (fav.get("imdb") or "").strip()
+                imdb_id_link = str(
+                    fav.get("imdb") or fav.get("imdb_id") or fav.get("imdbID") or ""
+                ).strip()
                 poster_url = fav["poster"]
                 if imdb_id_link and imdb_id_link.startswith("tt"):
                     st.markdown(
