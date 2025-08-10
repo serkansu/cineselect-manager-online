@@ -1,78 +1,105 @@
-
-import requests
+import os
 import json
-from omdb import fetch_ratings  # Yeni eklendi
+import requests
 
-API_KEY = "3028d7f0a392920b78e3549d4e6a66ec"
+API_KEY = os.getenv("TMDB_API_KEY")  # Render ya da lokal .env'den gelir
 BASE_URL = "https://api.themoviedb.org/3"
 POSTER_BASE = "https://image.tmdb.org/t/p/w500"
 
-def search_movie(query):
-    url = f"{BASE_URL}/search/movie?api_key={API_KEY}&query={query}"
-    res = requests.get(url).json()
+
+def _poster_url(path: str | None) -> str:
+    return f"{POSTER_BASE}{path}" if path else ""
+
+
+def search_movie(query: str):
+    """TMDB'de film ara (id = tmdb{number}). IMDb/RT puanı eklemiyoruz; sonradan alınacak."""
+    if not API_KEY:
+        return []
+    url = f"{BASE_URL}/search/movie"
+    res = requests.get(url, params={"api_key": API_KEY, "query": query}).json()
+
     results = []
     for item in res.get("results", []):
-        title = item["title"]
-        year = item["release_date"][:4] if item.get("release_date") else "N/A"
-        poster = f"{POSTER_BASE}{item['poster_path']}" if item.get("poster_path") else ""
-        description = item.get("overview", "")
-
-        imdb, rt = fetch_ratings(title, year)
         results.append({
-            "id": f"tmdb{item['id']}",
-            "title": title,
-            "year": year,
-            "poster": poster,
-            "description": description,
-            "imdb": imdb,
-            "rt": rt
+            "id": f"tmdb{item.get('id')}",             # <- TMDB id'si
+            "title": item.get("title") or "",
+            "year": (item.get("release_date") or "")[:4] or "N/A",
+            "poster": _poster_url(item.get("poster_path")),
+            "description": item.get("overview", ""),
+            "imdb": "",                                 # puanlar sonradan CSV/OMDb ile
+            "rt": 0
         })
     return results
 
-def search_tv(query):
-    url = f"{BASE_URL}/search/tv?api_key={API_KEY}&query={query}"
-    res = requests.get(url).json()
+
+def search_tv(query: str):
+    """TMDB'de dizi ara (id = tmdb{number})."""
+    if not API_KEY:
+        return []
+    url = f"{BASE_URL}/search/tv"
+    res = requests.get(url, params={"api_key": API_KEY, "query": query}).json()
+
     results = []
     for item in res.get("results", []):
-        title = item["name"]
-        year = item["first_air_date"][:4] if item.get("first_air_date") else "N/A"
-        poster = f"{POSTER_BASE}{item['poster_path']}" if item.get("poster_path") else ""
-        description = item.get("overview", "")
-
-        imdb, rt = fetch_ratings(title, year)
         results.append({
-            "id": f"tmdb{item['id']}",
-            "title": title,
-            "year": year,
-            "poster": poster,
-            "description": description,
-            "imdb": imdb,
-            "rt": rt
+            "id": f"tmdb{item.get('id')}",
+            "title": item.get("name") or "",
+            "year": (item.get("first_air_date") or "")[:4] or "N/A",
+            "poster": _poster_url(item.get("poster_path")),
+            "description": item.get("overview", ""),
+            "imdb": "",
+            "rt": 0
         })
     return results
 
-def search_by_actor(actor_name):
-    url = f"{BASE_URL}/search/person?api_key={API_KEY}&query={actor_name}"
-    res = requests.get(url).json()
-    actor_results = []
-    for actor in res.get("results", []):
-        actor_id = actor.get("id")
-        if not actor_id:
-            continue
-        credits_url = f"{BASE_URL}/person/{actor_id}/combined_credits?api_key={API_KEY}"
-        credits_res = requests.get(credits_url).json()
-        for item in credits_res.get("cast", []):
-            title = item.get("title") or item.get("name")
-            year = (item.get("release_date") or item.get("first_air_date") or "")[:4]
-            poster = f"{POSTER_BASE}{item['poster_path']}" if item.get("poster_path") else ""
-            imdb, rt = fetch_ratings(title, year)
-            actor_results.append({
-                "id": f"tmdb{item['id']}",
+
+def search_by_actor(actor_name: str):
+    """
+    Oyuncu adına göre arama yapar, TMDB 'person' sonucundaki known_for listesini
+    film/dizi kartlarına dönüştürür. (id=tmdb{number}, media_type ekler.)
+    """
+    if not API_KEY:
+        return []
+    url = f"{BASE_URL}/search/person"
+    res = requests.get(url, params={"api_key": API_KEY, "query": actor_name}).json()
+
+    out = []
+    for person in res.get("results", []):
+        for work in person.get("known_for", []):
+            media_type = work.get("media_type")  # "movie" | "tv"
+            title = work.get("title") or work.get("name") or ""
+            year = (work.get("release_date") or work.get("first_air_date") or "")[:4] or "N/A"
+            out.append({
+                "id": f"tmdb{work.get('id')}",
                 "title": title,
                 "year": year,
-                "poster": poster,
-                "description": "",
-                "imdb": imdb,
-                "rt": rt
+                "poster": _poster_url(work.get("poster_path")),
+                "description": work.get("overview", ""),
+                "imdb": "",
+                "rt": 0,
+                "media_type": media_type
             })
-    return actor_results
+    return out
+
+
+def add_to_favorites(item: dict, stars: int, media_type: str):
+    """
+    Yerel favorites.json'a ekler (Streamlit dışı basit kullanım için tutuluyor).
+    Uygulamanın ana akışı Firestore yazıyor; bunu istersen kaldırabilirsin.
+    """
+    filename = "favorites.json"
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):  # eski format desteği
+                data = {"movies": data, "shows": []}
+    except Exception:
+        data = {"movies": [], "shows": []}
+
+    key = "movies" if media_type == "movie" else "shows"
+    item = dict(item)
+    item["cineselectRating"] = stars
+    data[key].append(item)
+
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
