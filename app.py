@@ -85,6 +85,35 @@ def resolve_ratings_for_item(item: dict):
 
     return imdb_display, rt_display, imdb_float, rt_int
 # Firebase yapılandırması
+def to_export_item(fav: dict) -> dict:
+    # imdb_id'yi çıkar
+    imdb_id = fav.get("imdb_id") or (
+        fav.get("imdb") if isinstance(fav.get("imdb"), str) and str(fav.get("imdb")).startswith("tt")
+        else ""
+    )
+
+    # yıl -> int
+    try:
+        year_int = int(fav.get("year", 0) or 0)
+    except Exception:
+        year_int = 0
+
+    # imdb puanı -> float (opsiyonel: ayrı anahtara yazacağız)
+    try:
+        imdb_rating = round(float(fav.get("imdb") or 0), 1)
+    except Exception:
+        imdb_rating = 0.0
+
+    return {
+        "id": fav.get("id", imdb_id or ""),
+        "title": fav.get("title", ""),
+        "year": year_int,
+        "poster": fav.get("poster", ""),
+        "type": fav.get("type", "movie"),
+        "imdb": imdb_id,                 # ← JSON’da TT kimliği HER ZAMAN buraya
+        "rt": int(fav.get("rt", 0) or 0),
+        "imdbRating": imdb_rating        # (opsiyonel) puan ayrı anahtar
+    }
 def get_firestore():
     if not firebase_admin._apps:
         firebase_config = os.getenv("FIREBASE_ADMINSDK_JSON")
@@ -379,10 +408,11 @@ def create_favorites_json():
                 time.sleep(0.1)  # API rate limit için
                 db.collection("favorites").document(doc.id).update({"imdb": item["imdb"]})
             
-            if item["type"] == "movie":
-                favorites_data["movies"].append(item)
+            exp = to_export_item(item)
+            if exp["type"] == "movie":
+                favorites_data["movies"].append(exp)
             else:
-                favorites_data["series"].append(item)
+                favorites_data["series"].append(exp)
         # --- sanitize before dump (force types & filter misplaced) ---
         favorites_data["movies"] = [
             {**it, "type": "movie"}
@@ -532,11 +562,24 @@ with col2:
 do_enrich = st.checkbox("IMDb ID’leri TMDB’den doldur (limitli, yavaş olabilir)", value=False)
 
 if st.button("🔄 Senkronize Et (Firebase JSON)"):
-    # enrich True ise 50 kayda kadar TMDB çağrısı yapar, aksi halde hiç yapmaz
     sync_with_firebase(enrich=do_enrich, max_updates=50)
-    push_favorites_to_github()
-    st.success("✅ favorites.json senkronize edildi ve GitHub'a pushlandı!")
-
+    if create_favorites_json():
+        push_favorites_to_github()
+        st.success("✅ favorites.json senkronize edildi ve GitHub'a pushlandı!")
+    else:
+        st.error("❌ favorites.json üretilemedi, GitHub'a push edilmedi.")
+# ⬇️ Bu satırdan itibaren ekle
+try:
+    with open("favorites.json", "rb") as f:
+        st.download_button(
+            "📥 favorites.json indir",
+            data=f,
+            file_name="favorites.json",
+            mime="application/json",
+            key="dl_favorites_json",
+        )
+except FileNotFoundError:
+    pass
 def show_favorites_count():
     """Firebase'den film ve dizi sayılarını çekip gösterir."""
     try:
@@ -643,7 +686,7 @@ def get_sort_key(fav):
 def show_favorites(fav_type, label):
     global db
 
-    # Backfill butonu
+    # Backfill butonuresolve_ratings_for_item
     if st.button("🔄 Backfill IMDb/RT Ratings", key=f"backfill_{fav_type}"):
         # Ayarlar
         MAX_UPDATES = 60          # tek tıklamada en fazla kaç kayıt güncellensin
