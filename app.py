@@ -229,9 +229,9 @@ with col2:
     if st.button("🖼️ Toggle Posters"):
         st.session_state["show_posters"] = not st.session_state["show_posters"]
 
-    if st.button("🔄 Senkronize Et (Firebase JSON)"):
+    if st.button("📂 JSON & CSV Sync"):
         sync_with_firebase()
-        st.success("✅ favorites.json dosyası senkronize edildi.")
+        st.success("✅ favorites.json ve seed_ratings.csv senkronize edildi.")
 
 def show_favorites_count():
     movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
