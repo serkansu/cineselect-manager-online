@@ -401,8 +401,17 @@ if query:
     else:
         for idx, item in enumerate(results):
             st.divider()
-            if item["poster"] and show_posters:
-                st.image(item["poster"], width=180)
+            if item.get("poster") and show_posters:
+                imdb_id_link = (item.get("imdb") or "").strip()
+                poster_url = item["poster"]
+                if imdb_id_link and imdb_id_link.startswith("tt"):
+                    st.markdown(
+                        f'<a href="https://www.imdb.com/title/{imdb_id_link}/" target="_blank" rel="noopener">'
+                        f'<img src="{poster_url}" width="180"/></a>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.image(poster_url, width=180)
 
             st.markdown(f"**{idx+1}. {item['title']} ({item['year']})**")
             imdb_display = f"{item['imdb']:.1f}" if isinstance(item['imdb'], (int, float)) and item['imdb'] > 0 else "N/A"
@@ -530,7 +539,16 @@ def show_favorites(fav_type, label):
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
             if show_posters and fav.get("poster"):
-                st.image(fav["poster"], width=120)
+                imdb_id_link = (fav.get("imdb") or "").strip()
+                poster_url = fav["poster"]
+                if imdb_id_link and imdb_id_link.startswith("tt"):
+                    st.markdown(
+                        f'<a href="https://www.imdb.com/title/{imdb_id_link}/" target="_blank" rel="noopener">'
+                        f'<img src="{poster_url}" width="120"/></a>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.image(poster_url, width=120)
         with cols[1]:
             st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
         with cols[2]:
