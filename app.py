@@ -263,16 +263,34 @@ if query:
 
             if st.button("Add to Favorites", key=f"btn_{item['id']}"):
                 media_key = "movie" if media_type == "Movie" else ("show" if media_type == "TV Show" else "movie")
+
+                # 1) IMDb ID garanti altına al
+                imdb_id = (item.get("imdb") or "").strip()
+                if not imdb_id or imdb_id == "tt0000000":
+                    imdb_id = get_imdb_id_from_tmdb(          # sende fonksiyon adı farklıysa onu kullan
+                        title=item["title"],
+                        year=item.get("year"),
+                        is_series=(media_key == "show"),
+                    )
+
+                # 2) IMDb/RT puanlarını getir (önce CSV, yoksa OMDb)
+                stats = get_ratings(imdb_id)                   # omdb.get_ratings()
+                imdb_rating = float(stats.get("imdb_rating") or 0.0)
+                rt_score    = int(stats.get("rt") or 0)
+
+                # 3) Firestore'a yaz
                 db.collection("favorites").document(item["id"]).set({
                     "id": item["id"],
                     "title": item["title"],
-                    "year": item["year"],
-                    "imdb": item["imdb"],
-                    "poster": item["poster"],
-                    "rt": item["rt"],
+                    "year": item.get("year"),
+                    "imdb": imdb_id,
+                    "poster": item.get("poster"),
+                    "imdbRating": imdb_rating,                 # ✅ eklendi
+                    "rt": rt_score,                            # ✅ CSV/OMDb’den gelen kesin değer
                     "cineselectRating": manual_val,
-                    "type": media_key
+                    "type": media_key,
                 })
+
                 st.success(f"✅ {item['title']} added to favorites!")
                 st.session_state.query = ""
                 st.rerun()
