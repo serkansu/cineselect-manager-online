@@ -9,7 +9,7 @@ import time
 # --- OMDb (IMDb & Rotten Tomatoes) ---
 OMDB_API_KEY = os.getenv("OMDB_API_KEY", "")
 _omdb_cache = {}  # { "tt0105323": {"imdb": 8.0, "rt": 92} }
-@st.cache_data(show_spinner=False, ttl=60*60*24)  # 24 saat cache
+@st.cache_data(ttl=60*60*24, show_spinner=False)  # 24 saat cache
 def fetch_ratings_from_omdb(imdb_id: str):
     """IMDb ID ('tt...') ver, IMDb puanı (float) ve RT yüzdesi (int) döndür."""
     if not imdb_id or not isinstance(imdb_id, str) or not imdb_id.startswith("tt"):
@@ -25,12 +25,22 @@ def fetch_ratings_from_omdb(imdb_id: str):
 
     try:
         url = f"https://www.omdbapi.com/?i={imdb_id}&apikey={OMDB_API_KEY}&tomatoes=true"
-        r = requests.get(url, timeout=6)
-        r.raise_for_status()
-        j = r.json()
+        r = requests.get(url, timeout=6)  # OMDb API isteği
 
+        # JSON parse güvenliği
+        try:
+            data = r.json()
+        except Exception:
+            data = {}
+
+    # Limit / hata kontrolü
+    if (r.status_code != 200) or ("Error" in data and "limit" in str(data.get("Error", "")).lower()):
+    print(f"[OMDb] limit/status: {r.status_code} body={data}")
+        if r.status_code != 200:
+            return {}
+        
         # IMDb
-        imdb_val = j.get("imdbRating")
+        imdb_val = data.get("imdbRating")
         try:
             imdb_float = float(imdb_val) if imdb_val and imdb_val != "N/A" else 0.0
         except Exception:
@@ -38,7 +48,7 @@ def fetch_ratings_from_omdb(imdb_id: str):
 
         # Rotten Tomatoes (OMDb Patreon anahtarı yoksa çoğu zaman gelmez)
         rt_pct = 0
-        for x in j.get("Ratings", []):
+        for x in data.get("Ratings", []):
             if x.get("Source") == "Rotten Tomatoes":
                 v = x.get("Value")  # "92%" gibi
                 try:
@@ -755,8 +765,16 @@ def show_favorites(fav_type, label):
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites_sorted):
-        # Eksik veriler için kontrol ekleyin
-        imdb_display, rt_display, _, _ = resolve_ratings_for_item(fav)
+        # Ağ çağrısı yok: önce DB’deki sayısal değerleri kullan
+imdb_num = _as_float(fav.get("imdb", 0))
+imdb_display = f"{imdb_num:.1f}" if imdb_num > 0 else "N/A"
+
+# RT yüzdeyi int'e çevir (string gelse bile)
+try:
+    rt_num = int(float(fav.get("rt", 0) or 0))
+except Exception:
+    rt_num = 0
+rt_display = f"{rt_num}%" if rt_num > 0 else "N/A"
         
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
