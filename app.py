@@ -8,7 +8,7 @@ import firebase_admin
 import base64
 from firebase_admin import credentials, firestore
 import json
-# --- seed__ratings.csv için yol ve ekleme fonksiyonu ---
+# --- seed_ratings.csv için yol ve ekleme fonksiyonu ---
 SEED_PATH = Path(__file__).parent / "seed_ratings.csv"
 
 def append_seed_rating(imdb_id, title, year, imdb_rating, rt_score):
@@ -265,20 +265,43 @@ if query:
             if st.button("Add to Favorites", key=f"btn_{item['id']}"):
                 media_key = "movie" if media_type == "Movie" else ("show" if media_type == "TV Show" else "movie")
 
+                from omdb import get_ratings, fetch_ratings  # ÜSTE ekli olsun
+
                 # 1) IMDb ID garanti altına al
                 imdb_id = (item.get("imdb") or "").strip()
                 if not imdb_id or imdb_id == "tt0000000":
-                    imdb_id = get_imdb_id_from_tmdb(          # sende fonksiyon adı farklıysa onu kullan
+                    imdb_id = get_imdb_id_from_tmdb(
                         title=item["title"],
                         year=item.get("year"),
                         is_series=(media_key == "show"),
-                    )
+                )
 
-                # 2) IMDb/RT puanlarını getir (önce CSV, yoksa OMDb)
-                stats = get_ratings(imdb_id)                   # omdb.get_ratings()
+                # 2) IMDb/RT puanlarını getir (önce CSV/ID, yoksa başlık+yıl ile OMDb)
+                stats = {}
+                if imdb_id:
+                    stats = get_ratings(imdb_id) or {}
+
+                if not stats:
+                    # TMDB dış ID bulunamadıysa veya OMDb ID ile çekemediyse
+                    ir, rt = fetch_ratings(item["title"], item.get("year"))
+                    stats = {"imdb_rating": ir, "rt": rt}
+
                 imdb_rating = float(stats.get("imdb_rating") or 0.0)
                 rt_score    = int(stats.get("rt") or 0)
+                # Kaynağı belirle
+                if imdb_id and SEED_PATH.exists():
+                    with SEED_PATH.open(newline="", encoding="utf-8") as f:
+                        csv_data = list(csv.DictReader(f))
+                        csv_ids = [row.get("imdb_id") for row in csv_data]
+                        if imdb_id in csv_ids:
+                            source = "📂 CSV'den alındı"
+                        else:
+                            source = "🌐 OMDb/TMDb'den alındı"
+                else:
+                    source = "🌐 OMDb/TMDb'den alındı"
 
+                # Ekrana bilgi yazdır
+                st.write(f"{source} | 🆔 IMDb ID: {imdb_id} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
                 # 3) Firestore'a yaz
                 db.collection("favorites").document(item["id"]).set({
                     "id": item["id"],
