@@ -45,16 +45,16 @@ def render_cineselect(tmdb_id, default=0):
     if base_key not in st.session_state:
         st.session_state[base_key] = int(default)
 
-    with st.form(f"cs_form_{tmdb_id}"):
+    with st.container():
         cs_val = st.number_input(
             "CineSelect (manuel)",
             min_value=0, max_value=10000, step=1,
             value=int(st.session_state[base_key]),
             key=input_key  # DİKKAT: form içinde on_change YOK
         )
-        submitted = st.form_submit_button("Kaydet")
+        submit = st.button("Kaydet", key=f"cs_submit_{tmdb_id}")
 
-    if submitted:
+    if submit:
         st.session_state[base_key] = int(cs_val)
 
     return st.session_state[base_key]
