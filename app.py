@@ -1,3 +1,11 @@
+import time
+
+# --- Show rating source helper ---
+def show_rating_source(msg):
+    placeholder = st.empty()
+    placeholder.info(msg)
+    time.sleep(4)
+    placeholder.empty()
 from tmdb import search_movie, search_tv, search_by_actor
 from functools import partial
 
@@ -667,6 +675,19 @@ if query:
                 else:
                     existed = next((s for s in favorites["series"] if s.get("id") == item.get("id")), None)
                     target_list = favorites["series"]
+
+                # --- Determine rating source before saving ---
+                imdb_id = item.get("imdb")
+                csv_ratings = None
+                if imdb_id:
+                    csv_ratings = read_seed_rating(imdb_id)
+                if csv_ratings and (
+                    (csv_ratings.get("imdb_rating") is not None and csv_ratings.get("imdb_rating") != 0)
+                    or (csv_ratings.get("rt") is not None and csv_ratings.get("rt") != 0)
+                ):
+                    show_rating_source("🎯 Puan kaynağı: CSV (favorites.csv)")
+                else:
+                    show_rating_source("🎯 Puan kaynağı: OMDb API (imdb/rt güncellendi)")
 
                 if existed:
                     existed["cineselectRating"] = cine_select_value
