@@ -1,5 +1,7 @@
 import time
 
+from typing import Tuple, Optional
+
 # --- Show rating source helper ---
 def show_rating_source(msg):
     placeholder = st.empty()
@@ -35,40 +37,67 @@ def ensure_cs_state(base: str, default_val: int):
     ss.setdefault(base + "_input", ss[base + "_value"])
 from omdb import get_ratings
 
-# --- CineSelect controls (slider + manual) unified, avoids writing into widget keys ---
-def render_cineselect(tmdb_id: str, default: int = 7300) -> int:
-    import streamlit as st  # safe if already imported
-    base_key   = f"cs_base_{tmdb_id}"      # single source of truth
-    slider_key = f"slider_cs_{tmdb_id}"    # SLIDER widget key (never write manually)
-    input_key  = f"input_cs_{tmdb_id}"     # manual input key
 
+# --- CineSelect controls (slider + manual) unified, avoids writing into widget keys ---
+def render_cineselect(tmdb_id, default=0):
+    base_key = f"cs_{tmdb_id}"
+    input_key = f"{base_key}_input"
     if base_key not in st.session_state:
         st.session_state[base_key] = int(default)
 
-    def _sync_from_input():
-        try:
-            val = int(st.session_state[input_key])
-        except Exception:
-            val = int(st.session_state[base_key])
-        st.session_state[base_key] = int(val)
-        st.rerun()
+    with st.form(f"cs_form_{tmdb_id}"):
+        cs_val = st.number_input(
+            "CineSelect (manuel)",
+            min_value=0, max_value=10000, step=1,
+            value=int(st.session_state[base_key]),
+            key=input_key  # DİKKAT: form içinde on_change YOK
+        )
+        submitted = st.form_submit_button("Kaydet")
 
-    # UI
-    # NOTE: we never assign to st.session_state[slider_key] in code.
-    st.slider("CineSelect (slider)", 0, 10000,
-              value=int(st.session_state[base_key]),
-              key=slider_key)
-    st.number_input("CineSelect (manuel)", min_value=0, max_value=10000, step=1,
-                    value=int(st.session_state[base_key]),
-                    key=input_key, on_change=_sync_from_input)
+    if submitted:
+        st.session_state[base_key] = int(cs_val)
 
-    # If the slider moved, reflect it into the backing value
-    sl_val = st.session_state.get(slider_key)
-    if sl_val is not None and int(sl_val) != int(st.session_state[base_key]):
-        st.session_state[base_key] = int(sl_val)
-
-    return int(st.session_state[base_key])
+    return st.session_state[base_key]
 # --- end CineSelect controls ---
+
+
+# IMDb/RT kaynağını belirleyen yardımcı fonksiyon
+# Dönen değer: (imdb_val, rt_val, source_str)
+
+def pick_rating_source(
+    row: dict,
+    imdb_id: Optional[str],
+    omdb_key: Optional[str]
+) -> Tuple[Optional[str], Optional[str], str]:
+    # 1) CSV’de varsa onu kullan
+    csv_imdb = row.get("imdbRating") or row.get("imdb_rating")
+    csv_rt   = row.get("rt") or row.get("rotten_tomatoes")
+
+    if csv_imdb or csv_rt:
+        return (csv_imdb, csv_rt, f"CSV ({row.get('_csv_name','favorites.csv')})")
+
+    # 2) OMDb ile çek (IMDb/RT proxy’si)
+    if imdb_id and omdb_key:
+        try:
+            import requests
+            r = requests.get(
+                "https://www.omdbapi.com/",
+                params={"i": imdb_id, "apikey": omdb_key},
+                timeout=10
+            ).json()
+            ratings = {it["Source"]: it["Value"] for it in r.get("Ratings", [])}
+            imdb_val = ratings.get("Internet Movie Database")
+            rt_val   = ratings.get("Rotten Tomatoes")
+            if imdb_val or rt_val:
+                return (imdb_val, rt_val, "OMDb (IMDb/RT)")
+        except Exception:
+            pass
+
+    # 3) Sadece TMDb kimliği varsa ve puan bulunamadıysa
+    return (None, None, "TMDb (kimlik) — rating bulunamadı")
+    # Film ekle (add movie) optional wiring
+    # Try to locate the "Film ekle" block and inject rating source display.
+    # This is a best-effort stub and should be placed after IMDb id assignment in that block.
 import csv
 from pathlib import Path
 import streamlit as st
@@ -678,16 +707,21 @@ if query:
 
                 # --- Determine rating source before saving ---
                 imdb_id = item.get("imdb")
-                csv_ratings = None
-                if imdb_id:
-                    csv_ratings = read_seed_rating(imdb_id)
-                if csv_ratings and (
-                    (csv_ratings.get("imdb_rating") is not None and csv_ratings.get("imdb_rating") != 0)
-                    or (csv_ratings.get("rt") is not None and csv_ratings.get("rt") != 0)
-                ):
-                    show_rating_source("🎯 Puan kaynağı: CSV (favorites.csv)")
-                else:
-                    show_rating_source("🎯 Puan kaynağı: OMDb API (imdb/rt güncellendi)")
+                # IMDb/RT kaynağını kullanıcıya göster
+                try:
+                    imdb_val, rt_val, source = pick_rating_source(
+                        item,
+                        imdb_id,
+                        OMDB_KEY if 'OMDB_KEY' in globals() else os.getenv('OMDB_KEY')
+                    )
+                    if imdb_val:
+                        st.success(f"IMDb: {imdb_val}  — Kaynak: {source}")
+                    if rt_val:
+                        st.success(f"RT: {rt_val}      — Kaynak: {source}")
+                    st.caption("Kaynak bilgisini log’a da yazdım.")
+                    print(f"[film-ekle] {item.get('title')} | IMDb={imdb_val} | RT={rt_val} | Source={source}")
+                except Exception as _e:
+                    print(f"[film-ekle] rating kaynak gösterimi atlandı: {_e}")
 
                 if existed:
                     existed["cineselectRating"] = cine_select_value
@@ -766,7 +800,7 @@ def show_favorites(fav_type, label):
                 st.session_state[f"edit_mode_{fav['id']}"] = True
 
         if st.session_state.get(f"edit_mode_{fav['id']}", False):
-            # ----- CineSelect controls (safe, callback-based) -----
+            # ----- CineSelect controls (form-based, no on_change) -----
             tmdb_id = fav["id"]
             base = f"fav_cs_tmdb{tmdb_id}"  # a stable base for widget keys
             default_cs = int(fav.get("cineselectRating", 5000))  # adapt item variable name if needed
@@ -774,44 +808,43 @@ def show_favorites(fav_type, label):
             # make sure session_state is seeded BEFORE widget creation
             ensure_cs_state(base, default_cs)
 
-            col_slider, col_input = st.columns([2, 3])
             slider_key = base + "_slider"
             input_key = base + "_input"
-            with col_slider:
-                st.slider(
-                    "CineSelect (slider)",
-                    0,
-                    10000,
-                    st.session_state[slider_key],
-                    key=slider_key,
-                    on_change=partial(_sync_cs_from, "slider", base)
-                )
-            with col_input:
-                st.number_input(
-                    "CineSelect (manuel)",
-                    0,
-                    10000,
-                    st.session_state[input_key],
-                    key=input_key,
-                    on_change=partial(_sync_cs_from, "input", base)
-                )
-                if st.button("📌 Başa tuttur", key=base + "_reset"):
-                    # reset to default and refresh UI
-                    st.session_state[base + "_value"] = default_cs
-                    st.session_state[base + "_slider"] = default_cs
-                    st.session_state[base + "_input"] = default_cs
+            with st.form(f"edit_cs_form_{tmdb_id}"):
+                col_slider, col_input = st.columns([2, 3])
+                with col_slider:
+                    st.slider(
+                        "CineSelect (slider)",
+                        0,
+                        10000,
+                        st.session_state[slider_key],
+                        key=slider_key
+                    )
+                with col_input:
+                    st.number_input(
+                        "CineSelect (manuel)",
+                        0,
+                        10000,
+                        st.session_state[input_key],
+                        key=input_key
+                    )
+                    if st.button("📌 Başa tuttur", key=base + "_reset"):
+                        # reset to default and refresh UI
+                        st.session_state[base + "_value"] = default_cs
+                        st.session_state[base + "_slider"] = default_cs
+                        st.session_state[base + "_input"] = default_cs
+                        st.rerun()
+                save_clicked = st.form_submit_button("✅ Kaydet")
+                if save_clicked:
+                    # normalize the current value from slider or number_input
+                    current_cs = int(st.session_state.get(slider_key, st.session_state.get(input_key, 0)))
+                    st.session_state[base + "_value"] = current_cs
+                    st.session_state[slider_key] = current_cs
+                    st.session_state[input_key] = current_cs
+                    fav["cineselectRating"] = current_cs
+                    save_favorites(favorites)
+                    st.success("Kaydedildi ✓")
                     st.rerun()
-
-            # Save button below the inputs
-            save_clicked = st.button("✅ Kaydet", key=base + "_save")
-            current_cs_value = int(st.session_state[base + "_value"])
-            # ----- end CineSelect controls -----
-
-            if save_clicked:
-                fav["cineselectRating"] = current_cs_value
-                save_favorites(favorites)
-                st.success("Kaydedildi ✓")
-                st.rerun()
 
 if media_type == "Movie":
     show_favorites("movie", "Favorite Movies")
