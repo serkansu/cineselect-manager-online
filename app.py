@@ -309,6 +309,72 @@ def push_favorites_to_github():
         else:
             st.success(f"✅ Push OK: {file_path} → {repo_owner}/{repo_name}")
 from firebase_setup import get_firestore
+
+# --- Helper function to persist favorites to Firestore and normalize data ---
+def save_favorites(payload):
+    """
+    Persist favorites to Firestore.
+    Accepts:
+      - A dict with optional 'movies' and/or 'series' lists
+      - A list of items
+      - A single item dict
+    Upserts each item into the 'favorites' collection using its 'id' as the document id.
+    """
+    db_local = get_firestore()
+
+    def _to_number(v, kind="int"):
+        try:
+            if v in (None, "", "N/A"):
+                return 0 if kind == "int" else 0.0
+            return int(v) if kind == "int" else float(v)
+        except Exception:
+            return 0 if kind == "int" else 0.0
+
+    def _normalize_type(t):
+        t = (t or "").lower()
+        if t in ["tv", "tvshow", "tv_show", "series", "show"]:
+            return "show"
+        return "movie"
+
+    def _normalize_item(it):
+        it = dict(it or {})
+        it["type"] = _normalize_type(it.get("type"))
+        # ensure numeric fields are proper types
+        it["cineselectRating"] = _to_number(it.get("cineselectRating"), "int")
+        it["rt"] = _to_number(it.get("rt"), "int")
+        it["imdbRating"] = _to_number(it.get("imdbRating"), "float")
+        # ensure year is a string (kept for UI display / exports)
+        if it.get("year") is not None:
+            it["year"] = str(it.get("year"))
+        # imdb should be a string id if present
+        if it.get("imdb") is not None:
+            it["imdb"] = str(it.get("imdb"))
+        return it
+
+    # Normalize input to an iterable of items
+    items = []
+    if isinstance(payload, dict):
+        # could be {'movies': [...], 'series': [...]}
+        for key in ("movies", "series"):
+            if isinstance(payload.get(key), list):
+                items.extend(payload.get(key) or [])
+        # or already a single item dict shaped like a favorite
+        if payload and not items and payload.get("id"):
+            items = [payload]
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        # single item or unsupported shape
+        if getattr(payload, "get", None) and payload.get("id"):
+            items = [payload]
+
+    # Upsert each item
+    for it in items:
+        norm = _normalize_item(it)
+        doc_id = str(norm.get("id") or "").strip()
+        if not doc_id:
+            continue
+        db_local.collection("favorites").document(doc_id).set(norm, merge=True)
 def fix_invalid_imdb_ids(data):
     for section in ["movies", "shows"]:
         for item in data[section]:
@@ -637,7 +703,12 @@ def show_favorites(fav_type, label):
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
         imdb_display = f"{float(fav.get('imdbRating', 0) or 0):.1f}" if (fav.get("imdbRating") not in (None, "", "N/A")) else "N/A"
-        rt_display = f"{fav['rt']}%" if isinstance(fav["rt"], (int, float)) else "N/A"
+        _rt_raw = fav.get("rt", 0)
+        try:
+            _rt_num = int(float(_rt_raw))
+        except Exception:
+            _rt_num = 0
+        rt_display = f"{_rt_num}%" if _rt_num > 0 else "N/A"
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
             if show_posters and fav.get("poster"):
@@ -710,6 +781,7 @@ def show_favorites(fav_type, label):
                 fav["cineselectRating"] = current_cs_value
                 save_favorites(favorites)
                 st.success("Kaydedildi ✓")
+                st.rerun()
 
 if media_type == "Movie":
     show_favorites("movie", "Favorite Movies")
