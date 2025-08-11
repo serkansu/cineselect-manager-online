@@ -528,10 +528,27 @@ if query:
             rt_display = f"{int(rt_val)}%" if isinstance(rt_val, (int, float)) and rt_val > 0 else "N/A"
             st.markdown(f"⭐ IMDb: {imdb_display} &nbsp;&nbsp; 🍅 RT: {rt_display}", unsafe_allow_html=True)
 
-            slider_key = f"stars_{item['id']}"
-            manual_key = f"manual_{item['id']}"
-            slider_val = st.slider("🎯 CineSelect Rating:", 1, 10000, st.session_state.get(slider_key, 5000), step=10, key=slider_key)
-            manual_val = st.number_input("Manual value:", min_value=1, max_value=10000, value=slider_val, step=1, key=manual_key)
+            # --- CS controls with two-way sync (slider ↔ input)
+            s_key = f"stars_{item['id']}"
+            i_key = f"manual_{item['id']}"
+            # initialize defaults once
+            _default_cs = _clamp_cs(
+                st.session_state.get(s_key, item.get("cineselectRating") or 5000)
+            )
+            if s_key not in st.session_state:
+                st.session_state[s_key] = _default_cs
+            if i_key not in st.session_state:
+                st.session_state[i_key] = _default_cs
+
+            st.slider(
+                "🎯 CineSelect Rating:", 1, 10000, st.session_state[s_key], step=1,
+                key=s_key, on_change=_sync_cs_from_slider, args=(s_key, i_key)
+            )
+            st.number_input(
+                "Manual value:", min_value=1, max_value=10000, value=st.session_state[i_key], step=1,
+                key=i_key, on_change=_sync_cs_from_input, args=(i_key, s_key)
+            )
+            # --- end CS controls
 
             if st.button("Add to Favorites", key=f"btn_{item['id']}"):
                 media_key = "movie" if media_type == "Movie" else ("show" if media_type == "TV Show" else "movie")
@@ -612,7 +629,9 @@ if query:
                     "poster": item.get("poster"),
                     "imdbRating": imdb_rating,                 # ✅ eklendi
                     "rt": rt_score,                            # ✅ CSV/OMDb’den gelen kesin değer
-                    "cineselectRating": manual_val,
+                    "cineselectRating": _clamp_cs(
+                        st.session_state.get(i_key, st.session_state.get(s_key, _default_cs))
+                    ),
                     "type": media_key,
                 })
                 # 4) seed_ratings.csv'ye (yoksa) ekle
