@@ -309,6 +309,31 @@ def sort_flat_for_export(items, mode):
             return 0
     return sorted(items or [], key=key_fn, reverse=True)
 
+# ---------------------- CineSelect clamp & sync helpers ----------------------
+def _clamp_cs(v: int | float) -> int:
+    try:
+        iv = int(v)
+    except Exception:
+        iv = 0
+    if iv < 1:
+        return 1
+    if iv > 10000:
+        return 10000
+    return iv
+
+# Streamlit on_change helpers to keep slider and input in sync
+
+def _sync_cs_from_slider(src_key: str, dst_key: str):
+    v = _clamp_cs(st.session_state.get(src_key, 0))
+    st.session_state[src_key] = v
+    st.session_state[dst_key] = v
+
+
+def _sync_cs_from_input(src_key: str, dst_key: str):
+    v = _clamp_cs(st.session_state.get(src_key, 0))
+    st.session_state[src_key] = v
+    st.session_state[dst_key] = v
+
 def sync_with_firebase(sort_mode="cc"):
     favorites_data = {
         "movies": st.session_state.get("favorite_movies", []),
@@ -413,7 +438,6 @@ with col2:
     st.radio(
         "Sync sıralaması",
         ["imdb", "cc", "year"],
-        index=2,
         key="sync_sort_mode",
         horizontal=True,
         help="IMDb = IMDb puanı, cc = CineSelect, year = Yıl. Hepsi yüksekten düşüğe sıralar."
@@ -658,12 +682,48 @@ def show_favorites(fav_type, label):
                 st.session_state[f"edit_mode_{fav['id']}"] = True
 
         if st.session_state.get(f"edit_mode_{fav['id']}", False):
-            new_val = st.slider("🎯 CS:", 1, 10000, fav.get("cineselectRating", 5000), step=10, key=f"slider_{fav['id']}")
-            if st.button("✅ Save", key=f"save_{fav['id']}"):
-                db.collection("favorites").document(fav["id"]).update({"cineselectRating": new_val})
-                st.success(f"✅ Updated {fav['title']}'s rating.")
-                st.session_state[f"edit_mode_{fav['id']}"] = False
-                st.rerun()
+            s_key = f"slider_{fav['id']}"
+            i_key = f"input_{fav['id']}"
+            current = _clamp_cs(fav.get("cineselectRating", 5000))
+            if s_key not in st.session_state:
+                st.session_state[s_key] = current
+            if i_key not in st.session_state:
+                st.session_state[i_key] = current
+
+            st.slider(
+                "🎯 CS:", 1, 10000, st.session_state[s_key], step=1,
+                key=s_key, on_change=_sync_cs_from_slider, args=(s_key, i_key)
+            )
+            st.number_input(
+                "CS (manuel):", min_value=1, max_value=10000, value=st.session_state[i_key], step=1,
+                key=i_key, on_change=_sync_cs_from_input, args=(i_key, s_key)
+            )
+
+            cols_edit = st.columns([1,1,2])
+            with cols_edit[0]:
+                if st.button("✅ Kaydet", key=f"save_{fav['id']}"):
+                    new_val = _clamp_cs(st.session_state.get(i_key, st.session_state.get(s_key, current)))
+                    db.collection("favorites").document(fav["id"]).update({"cineselectRating": new_val})
+                    st.success(f"✅ {fav['title']} güncellendi.")
+                    st.session_state[f"edit_mode_{fav['id']}"] = False
+                    st.rerun()
+            with cols_edit[1]:
+                if st.button("📌 Başa tuttur", key=f"pin_{fav['id']}"):
+                    # Aynı türdeki favorilerde en yüksek CS'yi bul, 10 ekle (üst sınır 10000)
+                    cur_max = 0
+                    for d in db.collection("favorites").where("type", "==", fav_type).stream():
+                        try:
+                            cs = int((d.to_dict() or {}).get("cineselectRating") or 0)
+                            if cs > cur_max:
+                                cur_max = cs
+                        except Exception:
+                            pass
+                    pin_val = _clamp_cs(cur_max + 10)
+                    db.collection("favorites").document(fav["id"]).update({"cineselectRating": pin_val})
+                    st.session_state[s_key] = pin_val
+                    st.session_state[i_key] = pin_val
+                    st.success(f"📌 {fav['title']} en üste taşındı (CS={pin_val}).")
+                    st.rerun()
 
 if media_type == "Movie":
     show_favorites("movie", "Favorite Movies")
