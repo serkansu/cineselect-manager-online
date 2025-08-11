@@ -1,4 +1,29 @@
 from tmdb import search_movie, search_tv, search_by_actor
+from functools import partial
+
+# --- CineSelect state helpers (avoid writing into widget keys after creation) ---
+def _sync_cs_from(source: str, base: str):
+    import streamlit as st
+    ss = st.session_state
+    if source == "slider":
+        v = int(ss[base + "_slider"])  # coming from slider widget
+        ss[base + "_input"] = v
+        ss[base + "_value"] = v
+    else:  # source == "input"
+        v = int(ss[base + "_input"])  # coming from number_input widget
+        ss[base + "_slider"] = v
+        ss[base + "_value"] = v
+
+
+def ensure_cs_state(base: str, default_val: int):
+    import streamlit as st
+    ss = st.session_state
+    # establish a single source of truth
+    if base + "_value" not in ss:
+        ss[base + "_value"] = int(default_val)
+    # pre-seed widget keys BEFORE widgets are created
+    ss.setdefault(base + "_slider", ss[base + "_value"]) 
+    ss.setdefault(base + "_input", ss[base + "_value"]) 
 from omdb import get_ratings
 import csv
 from pathlib import Path
@@ -639,51 +664,52 @@ def show_favorites(fav_type, label):
                 st.session_state[f"edit_mode_{fav['id']}"] = True
 
         if st.session_state.get(f"edit_mode_{fav['id']}", False):
-            min_cs = 1
-            max_cs = 10000
-            step = 1
-            clamp_cs = _clamp_cs
-            # --- Favorites item edit controls (FORM) ---
+            # ----- CineSelect controls (safe, callback-based) -----
+            tmdb_id = fav["id"]
+            base = f"fav_cs_tmdb{tmdb_id}"  # a stable base for widget keys
+            default_cs = int(fav.get("cineselectRating", 5000))  # adapt item variable name if needed
+
+            # make sure session_state is seeded BEFORE widget creation
+            ensure_cs_state(base, default_cs)
+
             with st.form(f"edit_form_{fav['id']}"):
-                i_key = f"fav_input_cs_{fav['id']}"
-                s_key = f"fav_slider_cs_{fav['id']}"
-
-                # Seed current value once
-                if i_key not in st.session_state:
-                    st.session_state[i_key] = int(fav.get("cineselectRating", 5000))
-                if s_key not in st.session_state:
-                    st.session_state[s_key] = int(fav.get("cineselectRating", 5000))
-
-                c1, c2 = st.columns([2, 2])
-                with c1:
-                    st.slider("CineSelect (slider)", min_value=min_cs, max_value=max_cs, step=step, key=s_key)
-                with c2:
-                    st.number_input("CineSelect (manuel)", min_value=min_cs, max_value=max_cs, step=step, key=i_key)
+                col_slider, col_input = st.columns([2, 3])
+                with col_slider:
+                    st.slider(
+                        "CineSelect (slider)",
+                        min_value=1,
+                        max_value=10000,
+                        key=base + "_slider",
+                        on_change=partial(_sync_cs_from, "slider", base),
+                    )
+                with col_input:
+                    st.number_input(
+                        "CineSelect (manuel)",
+                        min_value=1,
+                        max_value=10000,
+                        step=1,
+                        key=base + "_input",
+                        on_change=partial(_sync_cs_from, "input", base),
+                    )
+                    if st.button("📌 Başa tuttur", key=base + "_reset"):
+                        # reset to default and refresh UI
+                        st.session_state[base + "_value"] = default_cs
+                        st.session_state[base + "_slider"] = default_cs
+                        st.session_state[base + "_input"] = default_cs
+                        st.rerun()
 
                 col_a, col_b = st.columns([1, 1])
                 save_clicked = col_a.form_submit_button("✅ Kaydet")
-                pin_clicked = col_b.form_submit_button("📌 Başa tuttur")
+                # The pin button now handled above in the input column
+
+                # the current, authoritative CineSelect value you should save/use elsewhere
+                current_cs_value = int(st.session_state[base + "_value"])  
+            # ----- end CineSelect controls -----
 
             if save_clicked:
-                new_val = clamp_cs(int(st.session_state.get(i_key, st.session_state.get(s_key, fav.get("cineselectRating", 5000)))))
-                st.session_state[i_key] = new_val
-                st.session_state[s_key] = new_val
-                fav["cineselectRating"] = new_val
+                fav["cineselectRating"] = current_cs_value
                 save_favorites(favorites)
                 st.success("Kaydedildi ✓")
-
-            if pin_clicked:
-                pin_val = clamp_cs(int(st.session_state.get(i_key, fav.get("cineselectRating", 5000))))
-                st.session_state[i_key] = pin_val
-                st.session_state[s_key] = pin_val
-                fav["cineselectRating"] = pin_val
-                # Move to top of its list
-                lst = favorites["movies"] if fav.get("type") == "movie" else favorites["series"]
-                lst[:] = [f for f in lst if f.get("id") != fav.get("id")]
-                lst.insert(0, fav)
-                save_favorites(favorites)
-                st.success("Başa tutturuldu 📌")
-            # --- /Favorites item edit controls (FORM) ---
 
 if media_type == "Movie":
     show_favorites("movie", "Favorite Movies")
