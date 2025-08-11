@@ -6,13 +6,14 @@ def _sync_cs_from(source: str, base: str):
     import streamlit as st
     ss = st.session_state
     if source == "slider":
-        v = int(ss[base + "_slider"])  # coming from slider widget
-        ss[base + "_input"] = v
-        ss[base + "_value"] = v
-    else:  # source == "input"
-        v = int(ss[base + "_input"])  # coming from number_input widget
-        ss[base + "_slider"] = v
-        ss[base + "_value"] = v
+        v = int(ss[base + "_slider"])
+    else:
+        v = int(ss[base + "_input"])
+    # Clamp between 0 and 10000
+    v = max(0, min(10000, v))
+    ss[base + "_slider"] = v
+    ss[base + "_input"] = v
+    ss[base + "_value"] = v
 
 
 def ensure_cs_state(base: str, default_val: int):
@@ -22,8 +23,8 @@ def ensure_cs_state(base: str, default_val: int):
     if base + "_value" not in ss:
         ss[base + "_value"] = int(default_val)
     # pre-seed widget keys BEFORE widgets are created
-    ss.setdefault(base + "_slider", ss[base + "_value"]) 
-    ss.setdefault(base + "_input", ss[base + "_value"]) 
+    ss.setdefault(base + "_slider", ss[base + "_value"])
+    ss.setdefault(base + "_input", ss[base + "_value"])
 from omdb import get_ratings
 import csv
 from pathlib import Path
@@ -743,38 +744,37 @@ def show_favorites(fav_type, label):
             # make sure session_state is seeded BEFORE widget creation
             ensure_cs_state(base, default_cs)
 
-            with st.form(f"edit_form_{fav['id']}"):
-                col_slider, col_input = st.columns([2, 3])
-                with col_slider:
-                    st.slider(
-                        "CineSelect (slider)",
-                        min_value=1,
-                        max_value=10000,
-                        key=base + "_slider",
-                        on_change=partial(_sync_cs_from, "slider", base),
-                    )
-                with col_input:
-                    st.number_input(
-                        "CineSelect (manuel)",
-                        min_value=1,
-                        max_value=10000,
-                        step=1,
-                        key=base + "_input",
-                        on_change=partial(_sync_cs_from, "input", base),
-                    )
-                    if st.button("📌 Başa tuttur", key=base + "_reset"):
-                        # reset to default and refresh UI
-                        st.session_state[base + "_value"] = default_cs
-                        st.session_state[base + "_slider"] = default_cs
-                        st.session_state[base + "_input"] = default_cs
-                        st.rerun()
+            col_slider, col_input = st.columns([2, 3])
+            slider_key = base + "_slider"
+            input_key = base + "_input"
+            with col_slider:
+                st.slider(
+                    "CineSelect (slider)",
+                    0,
+                    10000,
+                    st.session_state[slider_key],
+                    key=slider_key,
+                    on_change=partial(_sync_cs_from, "slider", base)
+                )
+            with col_input:
+                st.number_input(
+                    "CineSelect (manuel)",
+                    0,
+                    10000,
+                    st.session_state[input_key],
+                    key=input_key,
+                    on_change=partial(_sync_cs_from, "input", base)
+                )
+                if st.button("📌 Başa tuttur", key=base + "_reset"):
+                    # reset to default and refresh UI
+                    st.session_state[base + "_value"] = default_cs
+                    st.session_state[base + "_slider"] = default_cs
+                    st.session_state[base + "_input"] = default_cs
+                    st.rerun()
 
-                col_a, col_b = st.columns([1, 1])
-                save_clicked = col_a.form_submit_button("✅ Kaydet")
-                # The pin button now handled above in the input column
-
-                # the current, authoritative CineSelect value you should save/use elsewhere
-                current_cs_value = int(st.session_state[base + "_value"])  
+            # Save button below the inputs
+            save_clicked = st.button("✅ Kaydet", key=base + "_save")
+            current_cs_value = int(st.session_state[base + "_value"])
             # ----- end CineSelect controls -----
 
             if save_clicked:
