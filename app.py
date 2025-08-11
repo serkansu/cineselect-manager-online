@@ -286,7 +286,30 @@ def fix_invalid_imdb_ids(data):
             if isinstance(item.get("imdb"), (int, float)):
                 item["imdb"] = ""
 
-def sync_with_firebase():
+def sort_flat_for_export(items, mode):
+    """Sort a flat media list by selected mode in descending order.
+    mode: 'imdb' | 'cc' | 'year'
+    """
+    def key_fn(it):
+        if mode == "imdb":
+            v = it.get("imdbRating")
+            try:
+                return float(v) if v not in (None, "", "N/A") else -1
+            except Exception:
+                return -1
+        elif mode == "year":
+            try:
+                return int(str(it.get("year", "0")).strip() or 0)
+            except Exception:
+                return 0
+        # default: CineSelect score
+        try:
+            return int(it.get("cineselectRating") or 0)
+        except Exception:
+            return 0
+    return sorted(items or [], key=key_fn, reverse=True)
+
+def sync_with_firebase(sort_mode="cc"):
     favorites_data = {
         "movies": st.session_state.get("favorite_movies", []),
         "shows": st.session_state.get("favorite_series", [])
@@ -314,7 +337,8 @@ def sync_with_firebase():
                 is_series_by_type = raw_type in ["series", "tv", "tv_show", "tvshow", "show"]
 
                 is_series = is_series_by_section or is_series_by_type
-                item["type"] = "series" if is_series else "movie"
+                # NOTE: İç tip alanını tutarlı hale getiriyoruz: dizi için 'show', film için 'movie'
+                item["type"] = "show" if is_series else "movie"
                 imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
                 # IMDb ve RT puanlarını çek
                 stats = get_ratings(imdb_id)
@@ -337,8 +361,8 @@ def sync_with_firebase():
                 rt_score=_it.get("rt"),
             )
     # ---- Apply export ordering
-    sorted_movies = sort_media_for_export(favorites_data.get("movies", []), apply_franchise=True)
-    sorted_series = sort_media_for_export(favorites_data.get("shows", []), apply_franchise=False)
+    sorted_movies = sort_flat_for_export(favorites_data.get("movies", []), sort_mode)
+    sorted_series = sort_flat_for_export(favorites_data.get("shows", []), sort_mode)
 
     # Dışarı yazarken anahtar adını 'shows' -> 'series' olarak çevir
     output_data = {
@@ -377,9 +401,22 @@ with col2:
     if st.button("🖼️ Toggle Posters"):
         st.session_state["show_posters"] = not st.session_state["show_posters"]
 
+    # Varsayılan sıralama modu (cc = CineSelect)
+    if "sync_sort_mode" not in st.session_state:
+        st.session_state["sync_sort_mode"] = "cc"
+
     if st.button("📂 JSON & CSV Sync"):
-        sync_with_firebase()
+        sync_with_firebase(sort_mode=st.session_state.get("sync_sort_mode", "cc"))
         st.success("✅ favorites.json ve seed_ratings.csv senkronize edildi.")
+
+    # Butonun ALTINA üç radyo butonu (imdb, cc, year)
+    st.radio(
+        "Sync sıralaması",
+        ["imdb", "cc", "year"],
+        key="sync_sort_mode",
+        horizontal=True,
+        help="IMDb = IMDb puanı, cc = CineSelect, year = Yıl. Hepsi yüksekten düşüğe sıralar."
+    )
 
 def show_favorites_count():
     movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
