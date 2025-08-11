@@ -403,7 +403,7 @@ with col2:
 
     # Varsayılan sıralama modu (cc = CineSelect)
     if "sync_sort_mode" not in st.session_state:
-        st.session_state["sync_sort_mode"] = "cc"
+        st.session_state["sync_sort_mode"] = "year"
 
     if st.button("📂 JSON & CSV Sync"):
         sync_with_firebase(sort_mode=st.session_state.get("sync_sort_mode", "cc"))
@@ -413,6 +413,7 @@ with col2:
     st.radio(
         "Sync sıralaması",
         ["imdb", "cc", "year"],
+        index=2
         key="sync_sort_mode",
         horizontal=True,
         help="IMDb = IMDb puanı, cc = CineSelect, year = Yıl. Hepsi yüksekten düşüğe sıralar."
