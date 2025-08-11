@@ -26,6 +26,41 @@ def ensure_cs_state(base: str, default_val: int):
     ss.setdefault(base + "_slider", ss[base + "_value"])
     ss.setdefault(base + "_input", ss[base + "_value"])
 from omdb import get_ratings
+
+# --- CineSelect controls (slider + manual) unified, avoids writing into widget keys ---
+def render_cineselect(tmdb_id: str, default: int = 7300) -> int:
+    import streamlit as st  # safe if already imported
+    base_key   = f"cs_base_{tmdb_id}"      # single source of truth
+    slider_key = f"slider_cs_{tmdb_id}"    # SLIDER widget key (never write manually)
+    input_key  = f"input_cs_{tmdb_id}"     # manual input key
+
+    if base_key not in st.session_state:
+        st.session_state[base_key] = int(default)
+
+    def _sync_from_input():
+        try:
+            val = int(st.session_state[input_key])
+        except Exception:
+            val = int(st.session_state[base_key])
+        st.session_state[base_key] = int(val)
+        st.rerun()
+
+    # UI
+    # NOTE: we never assign to st.session_state[slider_key] in code.
+    st.slider("CineSelect (slider)", 0, 10000,
+              value=int(st.session_state[base_key]),
+              key=slider_key)
+    st.number_input("CineSelect (manuel)", min_value=0, max_value=10000, step=1,
+                    value=int(st.session_state[base_key]),
+                    key=input_key, on_change=_sync_from_input)
+
+    # If the slider moved, reflect it into the backing value
+    sl_val = st.session_state.get(slider_key)
+    if sl_val is not None and int(sl_val) != int(st.session_state[base_key]):
+        st.session_state[base_key] = int(sl_val)
+
+    return int(st.session_state[base_key])
+# --- end CineSelect controls ---
 import csv
 from pathlib import Path
 import streamlit as st
@@ -613,43 +648,17 @@ if query:
             rt_display = f"{int(rt_val)}%" if isinstance(rt_val, (int, float)) and rt_val > 0 else "N/A"
             st.markdown(f"⭐ IMDb: {imdb_display} &nbsp;&nbsp; 🍅 RT: {rt_display}", unsafe_allow_html=True)
 
-            # --- CS controls with two-way sync (slider ↔ input)
             # --- CineSelect controls for adding to favorites (FORM) ---
-            min_cs = 1
-            max_cs = 10000
-            step = 1
-            default_cs = item.get("cineselectRating") or 5000
-            clamp_cs = _clamp_cs
-            # favorites is not used here, but kept for context
             favorites = {"movies": [], "series": []}
-
+            default_cs = item.get("cineselectRating") or 5000
+            tmdb_id = item["id"]
             with st.form(f"add_form_{item['id']}"):
-                i_key = f"input_cs_{item['id']}"
-                s_key = f"slider_cs_{item['id']}"
-
-                # Initialize keys once
-                if i_key not in st.session_state:
-                    st.session_state[i_key] = int(default_cs)
-                if s_key not in st.session_state:
-                    st.session_state[s_key] = int(default_cs)
-
-                col1, col2 = st.columns([2, 2])
-                with col1:
-                    st.slider("CineSelect (slider)", min_value=min_cs, max_value=max_cs, step=step,
-                              key=s_key, help="Sürgü ile ayarla")
-                with col2:
-                    st.number_input("CineSelect (manuel)", min_value=min_cs, max_value=max_cs, step=step,
-                                    key=i_key, help="Klavye ile tam değer gir")
-
+                cs_val = render_cineselect(tmdb_id, default=default_cs)
                 add_clicked = st.form_submit_button("⭐️ Favorilere ekle")
 
             if add_clicked:
-                # Single source of truth: manual field
-                cs_val = clamp_cs(int(st.session_state.get(i_key, st.session_state.get(s_key, default_cs))))
-                # Keep both widgets in sync after submit
-                st.session_state[s_key] = cs_val
-                st.session_state[i_key] = cs_val
-
+                # Single source of truth: CineSelect value
+                cine_select_value = int(cs_val)
                 # Add or update favorite entry
                 existed = None
                 if item.get("type") == "movie":
@@ -660,7 +669,7 @@ if query:
                     target_list = favorites["series"]
 
                 if existed:
-                    existed["cineselectRating"] = cs_val
+                    existed["cineselectRating"] = cine_select_value
                     st.success("Mevcut favori güncellendi (CineSelect değiştirildi)")
                 else:
                     new_entry = {
@@ -672,7 +681,7 @@ if query:
                         "poster": item.get("poster"),
                         "rt": item.get("rt", 0),
                         "imdbRating": item.get("imdbRating", 0.0),
-                        "cineselectRating": cs_val
+                        "cineselectRating": cine_select_value
                     }
                     target_list.append(new_entry)
                     st.success("Favorilere eklendi!")
