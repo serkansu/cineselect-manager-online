@@ -413,7 +413,7 @@ with col2:
     st.radio(
         "Sync sıralaması",
         ["imdb", "cc", "year"],
-        index=2
+        index=2,
         key="sync_sort_mode",
         horizontal=True,
         help="IMDb = IMDb puanı, cc = CineSelect, year = Yıl. Hepsi yüksekten düşüğe sıralar."
