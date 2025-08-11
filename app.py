@@ -1,118 +1,15 @@
-import time
-
-from typing import Tuple, Optional
-
-# --- Show rating source helper ---
-def show_rating_source(msg):
-    placeholder = st.empty()
-    placeholder.info(msg)
-    time.sleep(4)
-    placeholder.empty()
 from tmdb import search_movie, search_tv, search_by_actor
-from functools import partial
-
-# --- CineSelect state helpers (avoid writing into widget keys after creation) ---
-def _sync_cs_from(source: str, base: str):
-    import streamlit as st
-    ss = st.session_state
-    if source == "slider":
-        v = int(ss[base + "_slider"])
-    else:
-        v = int(ss[base + "_input"])
-    # Clamp between 0 and 10000
-    v = max(0, min(10000, v))
-    ss[base + "_slider"] = v
-    ss[base + "_input"] = v
-    ss[base + "_value"] = v
-
-
-def ensure_cs_state(base: str, default_val: int):
-    import streamlit as st
-    ss = st.session_state
-    # establish a single source of truth
-    if base + "_value" not in ss:
-        ss[base + "_value"] = int(default_val)
-    # pre-seed widget keys BEFORE widgets are created
-    ss.setdefault(base + "_slider", ss[base + "_value"])
-    ss.setdefault(base + "_input", ss[base + "_value"])
 from omdb import get_ratings
-
-
-# --- CineSelect controls (slider + manual) unified, avoids writing into widget keys ---
-def render_cineselect(tmdb_id, default=0):
-    base_key = f"cs_{tmdb_id}"
-    input_key = f"{base_key}_input"
-    if base_key not in st.session_state:
-        st.session_state[base_key] = int(default)
-
-    with st.container():
-        cs_val = st.number_input(
-            "CineSelect (manuel)",
-            min_value=0, max_value=10000, step=1,
-            value=int(st.session_state[base_key]),
-            key=input_key  # DİKKAT: form içinde on_change YOK
-        )
-        submit = st.button("Kaydet", key=f"cs_submit_{tmdb_id}")
-
-    if submit:
-        st.session_state[base_key] = int(cs_val)
-
-    return st.session_state[base_key]
-# --- end CineSelect controls ---
-
-
-# IMDb/RT kaynağını belirleyen yardımcı fonksiyon
-# Dönen değer: (imdb_val, rt_val, source_str)
-
-def pick_rating_source(
-    row: dict,
-    imdb_id: Optional[str],
-    omdb_key: Optional[str]
-) -> Tuple[Optional[str], Optional[str], str]:
-    # 1) CSV’de varsa onu kullan
-    csv_imdb = row.get("imdbRating") or row.get("imdb_rating")
-    csv_rt   = row.get("rt") or row.get("rotten_tomatoes")
-
-    if csv_imdb or csv_rt:
-        return (csv_imdb, csv_rt, f"CSV ({row.get('_csv_name','favorites.csv')})")
-
-    # 2) OMDb ile çek (IMDb/RT proxy’si)
-    if imdb_id and omdb_key:
-        try:
-            import requests
-            r = requests.get(
-                "https://www.omdbapi.com/",
-                params={"i": imdb_id, "apikey": omdb_key},
-                timeout=10
-            ).json()
-            ratings = {it["Source"]: it["Value"] for it in r.get("Ratings", [])}
-            imdb_val = ratings.get("Internet Movie Database")
-            rt_val   = ratings.get("Rotten Tomatoes")
-            if imdb_val or rt_val:
-                return (imdb_val, rt_val, "OMDb (IMDb/RT)")
-        except Exception:
-            pass
-
-    # 3) Sadece TMDb kimliği varsa ve puan bulunamadıysa
-    return (None, None, "TMDb (kimlik) — rating bulunamadı")
-    # Film ekle (add movie) optional wiring
-    # Try to locate the "Film ekle" block and inject rating source display.
-    # This is a best-effort stub and should be placed after IMDb id assignment in that block.
 import csv
 from pathlib import Path
 import streamlit as st
+import requests
+import firebase_admin
+import base64
+from firebase_admin import credentials, firestore
 import json
 import os
 import time
-import base64
-from datetime import datetime
-import requests
-# ---- Streamlit page config (must be before any other st.* calls) ----
-try:
-    st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
-except Exception:
-    # set_page_config can only be called once; ignore if already set
-    pass
 # ---------- Sorting helpers for Streamio export ----------
 ROMAN_MAP = {
     "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
@@ -381,73 +278,8 @@ def push_favorites_to_github():
                 pass
         else:
             st.success(f"✅ Push OK: {file_path} → {repo_owner}/{repo_name}")
+import streamlit as st
 from firebase_setup import get_firestore
-
-# --- Helper function to persist favorites to Firestore and normalize data ---
-def save_favorites(payload):
-    """
-    Persist favorites to Firestore.
-    Accepts:
-      - A dict with optional 'movies' and/or 'series' lists
-      - A list of items
-      - A single item dict
-    Upserts each item into the 'favorites' collection using its 'id' as the document id.
-    """
-    db_local = get_firestore()
-
-    def _to_number(v, kind="int"):
-        try:
-            if v in (None, "", "N/A"):
-                return 0 if kind == "int" else 0.0
-            return int(v) if kind == "int" else float(v)
-        except Exception:
-            return 0 if kind == "int" else 0.0
-
-    def _normalize_type(t):
-        t = (t or "").lower()
-        if t in ["tv", "tvshow", "tv_show", "series", "show"]:
-            return "show"
-        return "movie"
-
-    def _normalize_item(it):
-        it = dict(it or {})
-        it["type"] = _normalize_type(it.get("type"))
-        # ensure numeric fields are proper types
-        it["cineselectRating"] = _to_number(it.get("cineselectRating"), "int")
-        it["rt"] = _to_number(it.get("rt"), "int")
-        it["imdbRating"] = _to_number(it.get("imdbRating"), "float")
-        # ensure year is a string (kept for UI display / exports)
-        if it.get("year") is not None:
-            it["year"] = str(it.get("year"))
-        # imdb should be a string id if present
-        if it.get("imdb") is not None:
-            it["imdb"] = str(it.get("imdb"))
-        return it
-
-    # Normalize input to an iterable of items
-    items = []
-    if isinstance(payload, dict):
-        # could be {'movies': [...], 'series': [...]}
-        for key in ("movies", "series"):
-            if isinstance(payload.get(key), list):
-                items.extend(payload.get(key) or [])
-        # or already a single item dict shaped like a favorite
-        if payload and not items and payload.get("id"):
-            items = [payload]
-    elif isinstance(payload, list):
-        items = payload
-    else:
-        # single item or unsupported shape
-        if getattr(payload, "get", None) and payload.get("id"):
-            items = [payload]
-
-    # Upsert each item
-    for it in items:
-        norm = _normalize_item(it)
-        doc_id = str(norm.get("id") or "").strip()
-        if not doc_id:
-            continue
-        db_local.collection("favorites").document(doc_id).set(norm, merge=True)
 def fix_invalid_imdb_ids(data):
     for section in ["movies", "shows"]:
         for item in data[section]:
@@ -491,6 +323,16 @@ def _clamp_cs(v: int | float) -> int:
 
 # Streamlit on_change helpers to keep slider and input in sync
 
+def _sync_cs_from_slider(src_key: str, dst_key: str):
+    v = _clamp_cs(st.session_state.get(src_key, 0))
+    st.session_state[src_key] = v
+    st.session_state[dst_key] = v
+
+
+def _sync_cs_from_input(src_key: str, dst_key: str):
+    v = _clamp_cs(st.session_state.get(src_key, 0))
+    st.session_state[src_key] = v
+    st.session_state[dst_key] = v
 
 def sync_with_firebase(sort_mode="cc"):
     favorites_data = {
@@ -567,6 +409,7 @@ series_docs = db.collection("favorites").where("type", "==", "show").stream()
 
 st.session_state["favorite_movies"] = [doc.to_dict() for doc in movie_docs]
 st.session_state["favorite_series"] = [doc.to_dict() for doc in series_docs]
+st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
 st.markdown("""
     <h1 style='text-align:center;'>🍿 <b>Serkan's Watchagain Movies & Series <span style="color:#2ecc71;">ONLINE ✅</span></b></h1>
 """, unsafe_allow_html=True)
@@ -685,64 +528,108 @@ if query:
             rt_display = f"{int(rt_val)}%" if isinstance(rt_val, (int, float)) and rt_val > 0 else "N/A"
             st.markdown(f"⭐ IMDb: {imdb_display} &nbsp;&nbsp; 🍅 RT: {rt_display}", unsafe_allow_html=True)
 
-            # --- CineSelect controls for adding to favorites (FORM) ---
-            favorites = {"movies": [], "series": []}
-            default_cs = item.get("cineselectRating") or 5000
-            tmdb_id = item["id"]
-            with st.form(f"add_form_{item['id']}"):
-                cs_val = render_cineselect(tmdb_id, default=default_cs)
-                add_clicked = st.form_submit_button("⭐️ Favorilere ekle")
+            slider_key = f"stars_{item['id']}"
+            manual_key = f"manual_{item['id']}"
+            slider_val = st.slider("🎯 CineSelect Rating:", 1, 10000, st.session_state.get(slider_key, 5000), step=10, key=slider_key)
+            manual_val = st.number_input("Manual value:", min_value=1, max_value=10000, value=slider_val, step=1, key=manual_key)
 
-            if add_clicked:
-                # Single source of truth: CineSelect value
-                cine_select_value = int(cs_val)
-                # Add or update favorite entry
-                existed = None
-                if item.get("type") == "movie":
-                    existed = next((m for m in favorites["movies"] if m.get("id") == item.get("id")), None)
-                    target_list = favorites["movies"]
+            if st.button("Add to Favorites", key=f"btn_{item['id']}"):
+                media_key = "movie" if media_type == "Movie" else ("show" if media_type == "TV Show" else "movie")
+
+                from omdb import get_ratings, fetch_ratings  # ÜSTE ekli olsun
+
+                # 1) IMDb ID garanti altına al
+                imdb_id = (item.get("imdb") or "").strip()
+                if not imdb_id or imdb_id == "tt0000000":
+                    imdb_id = get_imdb_id_from_tmdb(
+                        title=item["title"],
+                        year=item.get("year"),
+                        is_series=(media_key == "show"),
+                )
+
+                # 2) IMDb/RT puanlarını getir (ÖNCE yerel CSV, yoksa OMDb-ID, o da yoksa Title/Year)
+                stats = {}
+                raw_id = {}
+                raw_title = {}
+                source = None
+
+                # a) yerel CSV
+                seed_hit = read_seed_rating(imdb_id)
+                if seed_hit and (seed_hit.get("imdb_rating") or seed_hit.get("rt")):
+                    stats = {"imdb_rating": seed_hit.get("imdb_rating"), "rt": seed_hit.get("rt")}
+                    source = "CSV"
+
+                # b) CSV yoksa/eksikse OMDb by ID
+                if not source:
+                    if imdb_id:
+                        stats = get_ratings(imdb_id) or {}
+                        raw_id = (stats.get("raw") or {})
+                        source = "CSV/OMDb-ID" if raw_id else None  # get_ratings CSV'den dönerse raw boş kalabilir
+
+                # c) hâlâ boşsa OMDb by Title/Year
+                if not stats or ((stats.get("imdb_rating") in (None, 0, "N/A")) and (stats.get("rt") in (None, 0, "N/A"))):
+                    ir, rt, raw_title = fetch_ratings(item["title"], item.get("year"))
+                    stats = {"imdb_rating": ir, "rt": rt}
+                    if not source:
+                        source = "OMDb-title"
+
+                imdb_rating = float(stats.get("imdb_rating") or 0.0)
+                rt_score    = int(stats.get("rt") or 0)
+
+                # 🔎 DEBUG: Kaynak ve ham yanıtlar
+                st.write(f"🔍 Source: {source or '—'} | 🆔 IMDb ID: {imdb_id or '—'} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
+
+                # Extra, user-visible diagnostics
+                error_msg = None
+                if isinstance(raw_id, dict):
+                    error_msg = raw_id.get("Error")
+                if not error_msg and isinstance(raw_title, dict):
+                    error_msg = raw_title.get("Error")
+
+                if error_msg:
+                    st.error(f"OMDb error: {error_msg}. Check OMDB_API_KEY.", icon="🚨")
+                elif source == "CSV":
+                    st.info("Source: seed_ratings.csv (cached)", icon="📂")
+                elif source == "CSV/OMDb-ID":
+                    st.info(f"Source: OMDb by IMDb ID ({imdb_id})", icon="🔎")
                 else:
-                    existed = next((s for s in favorites["series"] if s.get("id") == item.get("id")), None)
-                    target_list = favorites["series"]
+                    st.info(f"Source: OMDb by Title/Year ({item['title']} {item.get('year')})", icon="🔎")
 
-                # --- Determine rating source before saving ---
-                imdb_id = item.get("imdb")
-                # IMDb/RT kaynağını kullanıcıya göster
-                try:
-                    imdb_val, rt_val, source = pick_rating_source(
-                        item,
-                        imdb_id,
-                        OMDB_KEY if 'OMDB_KEY' in globals() else os.getenv('OMDB_KEY')
-                    )
-                    if imdb_val:
-                        st.success(f"IMDb: {imdb_val}  — Kaynak: {source}")
-                    if rt_val:
-                        st.success(f"RT: {rt_val}      — Kaynak: {source}")
-                    st.caption("Kaynak bilgisini log’a da yazdım.")
-                    print(f"[film-ekle] {item.get('title')} | IMDb={imdb_val} | RT={rt_val} | Source={source}")
-                except Exception as _e:
-                    print(f"[film-ekle] rating kaynak gösterimi atlandı: {_e}")
-
-                if existed:
-                    existed["cineselectRating"] = cine_select_value
-                    st.success("Mevcut favori güncellendi (CineSelect değiştirildi)")
-                else:
-                    new_entry = {
-                        "id": item.get("id"),
-                        "type": item.get("type"),
-                        "imdb": item.get("imdb"),
-                        "title": item.get("title"),
-                        "year": item.get("year"),
-                        "poster": item.get("poster"),
-                        "rt": item.get("rt", 0),
-                        "imdbRating": item.get("imdbRating", 0.0),
-                        "cineselectRating": cine_select_value
-                    }
-                    target_list.append(new_entry)
-                    st.success("Favorilere eklendi!")
-
-                save_favorites(favorites)
-            # --- /CineSelect controls (FORM) ---
+                if raw_id:
+                    import json as _json
+                    st.caption("OMDb by ID (raw JSON)")
+                    st.code(_json.dumps(raw_id, ensure_ascii=False, indent=2))
+                if raw_title:
+                    import json as _json
+                    st.caption("OMDb by title (raw JSON)")
+                    st.code(_json.dumps(raw_title, ensure_ascii=False, indent=2))
+                # 3) Firestore'a yaz
+                db.collection("favorites").document(item["id"]).set({
+                    "id": item["id"],
+                    "title": item["title"],
+                    "year": item.get("year"),
+                    "imdb": imdb_id,
+                    "poster": item.get("poster"),
+                    "imdbRating": imdb_rating,                 # ✅ eklendi
+                    "rt": rt_score,                            # ✅ CSV/OMDb’den gelen kesin değer
+                    "cineselectRating": manual_val,
+                    "type": media_key,
+                })
+                # 4) seed_ratings.csv'ye (yoksa) ekle
+                append_seed_rating(
+                    imdb_id=imdb_id,
+                    title=item["title"],
+                    year=item.get("year"),
+                    imdb_rating=imdb_rating,
+                    rt_score=rt_score,
+                )
+                st.success(f"✅ {item['title']} added to favorites!")
+                # clear search on next run to avoid "modified after instantiation" error
+                st.session_state.clear_search = True
+                # Let the user see the diagnostics before refresh
+                st.toast("Refreshing…", icon="🔄")
+                time.sleep(1.2)
+                st.rerun()
 
 st.divider()
 st.subheader("❤️ Your Favorites")
@@ -768,12 +655,7 @@ def show_favorites(fav_type, label):
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
         imdb_display = f"{float(fav.get('imdbRating', 0) or 0):.1f}" if (fav.get("imdbRating") not in (None, "", "N/A")) else "N/A"
-        _rt_raw = fav.get("rt", 0)
-        try:
-            _rt_num = int(float(_rt_raw))
-        except Exception:
-            _rt_num = 0
-        rt_display = f"{_rt_num}%" if _rt_num > 0 else "N/A"
+        rt_display = f"{fav['rt']}%" if isinstance(fav["rt"], (int, float)) else "N/A"
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
             if show_posters and fav.get("poster"):
@@ -800,50 +682,47 @@ def show_favorites(fav_type, label):
                 st.session_state[f"edit_mode_{fav['id']}"] = True
 
         if st.session_state.get(f"edit_mode_{fav['id']}", False):
-            # ----- CineSelect controls (form-based, no on_change) -----
-            tmdb_id = fav["id"]
-            base = f"fav_cs_tmdb{tmdb_id}"  # a stable base for widget keys
-            default_cs = int(fav.get("cineselectRating", 5000))  # adapt item variable name if needed
+            s_key = f"slider_{fav['id']}"
+            i_key = f"input_{fav['id']}"
+            current = _clamp_cs(fav.get("cineselectRating", 5000))
+            if s_key not in st.session_state:
+                st.session_state[s_key] = current
+            if i_key not in st.session_state:
+                st.session_state[i_key] = current
 
-            # make sure session_state is seeded BEFORE widget creation
-            ensure_cs_state(base, default_cs)
+            st.slider(
+                "🎯 CS:", 1, 10000, st.session_state[s_key], step=1,
+                key=s_key, on_change=_sync_cs_from_slider, args=(s_key, i_key)
+            )
+            st.number_input(
+                "CS (manuel):", min_value=1, max_value=10000, value=st.session_state[i_key], step=1,
+                key=i_key, on_change=_sync_cs_from_input, args=(i_key, s_key)
+            )
 
-            slider_key = base + "_slider"
-            input_key = base + "_input"
-            with st.form(f"edit_cs_form_{tmdb_id}"):
-                col_slider, col_input = st.columns([2, 3])
-                with col_slider:
-                    st.slider(
-                        "CineSelect (slider)",
-                        0,
-                        10000,
-                        st.session_state[slider_key],
-                        key=slider_key
-                    )
-                with col_input:
-                    st.number_input(
-                        "CineSelect (manuel)",
-                        0,
-                        10000,
-                        st.session_state[input_key],
-                        key=input_key
-                    )
-                    if st.button("📌 Başa tuttur", key=base + "_reset"):
-                        # reset to default and refresh UI
-                        st.session_state[base + "_value"] = default_cs
-                        st.session_state[base + "_slider"] = default_cs
-                        st.session_state[base + "_input"] = default_cs
-                        st.rerun()
-                save_clicked = st.form_submit_button("✅ Kaydet")
-                if save_clicked:
-                    # normalize the current value from slider or number_input
-                    current_cs = int(st.session_state.get(slider_key, st.session_state.get(input_key, 0)))
-                    st.session_state[base + "_value"] = current_cs
-                    st.session_state[slider_key] = current_cs
-                    st.session_state[input_key] = current_cs
-                    fav["cineselectRating"] = current_cs
-                    save_favorites(favorites)
-                    st.success("Kaydedildi ✓")
+            cols_edit = st.columns([1,1,2])
+            with cols_edit[0]:
+                if st.button("✅ Kaydet", key=f"save_{fav['id']}"):
+                    new_val = _clamp_cs(st.session_state.get(i_key, st.session_state.get(s_key, current)))
+                    db.collection("favorites").document(fav["id"]).update({"cineselectRating": new_val})
+                    st.success(f"✅ {fav['title']} güncellendi.")
+                    st.session_state[f"edit_mode_{fav['id']}"] = False
+                    st.rerun()
+            with cols_edit[1]:
+                if st.button("📌 Başa tuttur", key=f"pin_{fav['id']}"):
+                    # Aynı türdeki favorilerde en yüksek CS'yi bul, 10 ekle (üst sınır 10000)
+                    cur_max = 0
+                    for d in db.collection("favorites").where("type", "==", fav_type).stream():
+                        try:
+                            cs = int((d.to_dict() or {}).get("cineselectRating") or 0)
+                            if cs > cur_max:
+                                cur_max = cs
+                        except Exception:
+                            pass
+                    pin_val = _clamp_cs(cur_max + 10)
+                    db.collection("favorites").document(fav["id"]).update({"cineselectRating": pin_val})
+                    st.session_state[s_key] = pin_val
+                    st.session_state[i_key] = pin_val
+                    st.success(f"📌 {fav['title']} en üste taşındı (CS={pin_val}).")
                     st.rerun()
 
 if media_type == "Movie":
@@ -856,4 +735,3 @@ if st.button("🔝 Go to Top Again"):
     st.rerun()
 
 st.markdown("<p style='text-align: center; color: gray;'>Created by <b>SS</b></p>", unsafe_allow_html=True)
-
