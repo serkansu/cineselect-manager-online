@@ -334,6 +334,31 @@ def _sync_cs_from_input(src_key: str, dst_key: str):
     st.session_state[src_key] = v
     st.session_state[dst_key] = v
 
+# --- Simple session-based auth gate using an env var ---
+def ensure_authenticated():
+    """If APP_ACCESS_KEY is set in env, ask for it once per browser tab.
+    When correct, remember in st.session_state until the tab is closed or refreshed.
+    """
+    key = (os.getenv("APP_ACCESS_KEY") or "").strip()
+    if not key:
+        # No key configured -> app stays public
+        return
+
+    if st.session_state.get("_auth_ok", False):
+        return
+
+    st.title("🔒 Serkan’s Watchagain (Manager)")
+    st.info("Bu sayfa şifre ile korunuyor. Lütfen erişim anahtarını girin.")
+    pw = st.text_input("Şifre", type="password", key="__app_pw")
+    if st.button("Giriş", key="__app_login"):
+        if pw == key:
+            st.session_state["_auth_ok"] = True
+            st.rerun()
+        else:
+            st.error("Yanlış şifre. Tekrar deneyin.")
+    st.stop()
+# --- /auth gate ---
+
 def sync_with_firebase(sort_mode="cc"):
     favorites_data = {
         "movies": st.session_state.get("favorite_movies", []),
@@ -402,6 +427,10 @@ def sync_with_firebase(sort_mode="cc"):
     # GitHub'a push et
     push_favorites_to_github()
 
+# --- Page config and auth gate (must run before any Firestore access) ---
+st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
+ensure_authenticated()
+# --- /Page config & auth gate ---
 db = get_firestore()
 # Firestore'dan verileri çek ve session'a yaz
 movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
@@ -409,7 +438,6 @@ series_docs = db.collection("favorites").where("type", "==", "show").stream()
 
 st.session_state["favorite_movies"] = [doc.to_dict() for doc in movie_docs]
 st.session_state["favorite_series"] = [doc.to_dict() for doc in series_docs]
-st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
 st.markdown("""
     <h1 style='text-align:center;'>🍿 <b>Serkan's Watchagain Movies & Series <span style="color:#2ecc71;">ONLINE ✅</span></b></h1>
 """, unsafe_allow_html=True)
