@@ -370,7 +370,7 @@ def ensure_authenticated():
     st.markdown(login_form, unsafe_allow_html=True)
 
     # Check for submitted password in query params (Streamlit workaround)
-    pw = st.query_params.get("password", [None])[0]
+    pw = st.query_params.get("password")
     if pw and pw == key:
         st.session_state["_auth_ok"] = True
         st.rerun()
@@ -760,6 +760,9 @@ def show_favorites(fav_type, label):
 
                 imdb_rating = float(stats.get("imdb_rating") or 0.0)
                 rt_score = int(stats.get("rt") or 0)
+
+                # --- Debug log before updating Firestore ---
+                st.info(f"🎬 Refresh Debug → Title='{title}' ({year}) | IMDb ID={imdb_id} | IMDb={imdb_rating} | RT={rt_score}")
 
                 # Update Firestore
                 db.collection("favorites").document(fav["id"]).update({
