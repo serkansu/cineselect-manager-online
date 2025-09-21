@@ -357,22 +357,24 @@ def ensure_authenticated():
 
     st.title("🔒 Serkan’s Watchagain (Manager)")
 
-    # Streamlit form → Enter works, no custom HTML submission (avoids 403)
-    with st.form("login_form"):
-        pw = st.text_input("Şifre", type="password", key="__pw")
-        submitted = st.form_submit_button("Giriş")
-        if submitted:
-            if pw == key:
-                st.session_state["_auth_ok"] = True
-                st.rerun()
-            else:
-                st.error("❌ Hatalı şifre")
+    # Hybrid login: real HTML form so Safari/Face ID can save password
+    st.markdown("""
+    <form action="" method="get">
+        <input type="password" name="password"
+               placeholder="Şifre"
+               autocomplete="current-password"
+               style="padding:8px; font-size:16px;">
+        <input type="submit" value="Giriş"
+               style="padding:8px; font-size:16px;">
+    </form>
+    """, unsafe_allow_html=True)
 
-    # Hint for Safari/iOS Keychain to recognize a password field
-    st.markdown(
-        '<input type="password" style="position:absolute;left:-9999px;top:-9999px;" autocomplete="current-password" />',
-        unsafe_allow_html=True,
-    )
+    pw = st.query_params.get("password")
+    if pw and pw == key:
+        st.session_state["_auth_ok"] = True
+        st.rerun()
+    elif pw:
+        st.error("❌ Hatalı şifre")
 
     st.stop()
 # --- /auth gate ---
