@@ -356,20 +356,23 @@ def ensure_authenticated():
 
     st.title("🔒 Serkan’s Watchagain (Manager)")
 
-    # Streamlit form → supports Enter key and browser password managers
-    with st.form("login_form"):
-        pw = st.text_input(
-            "Şifre",
-            type="password",
-            key="__app_pw",
-            autocomplete="current-password",
-            help="Şifreni gir ve Enter’a basabilirsin."
-        )
-        submitted = st.form_submit_button("Giriş")
+    # Custom HTML form → Safari/iOS Keychain can save password
+    st.markdown("""
+    <form action="" method="post">
+      <input type="password" name="password"
+             placeholder="Şifre"
+             autocomplete="current-password"
+             style="padding:8px; font-size:16px;">
+      <input type="submit" value="Giriş"
+             style="padding:8px; font-size:16px;">
+    </form>
+    """, unsafe_allow_html=True)
 
-        if submitted and pw == key:
-            st.session_state["_auth_ok"] = True
-            st.rerun()
+    # Read submitted password from query params
+    pw = st.query_params.get("password")
+    if pw and pw == key:
+        st.session_state["_auth_ok"] = True
+        st.rerun()
 
     st.stop()
 # --- /auth gate ---
@@ -756,6 +759,15 @@ def show_favorites(fav_type, label):
 
                 imdb_rating = float(stats.get("imdb_rating") or 0.0)
                 rt_score = int(stats.get("rt") or 0)
+
+                # Fallback: If both IMDb and RT are 0, try fetching by Title/Year again
+                if imdb_rating == 0.0 and rt_score == 0:
+                    from omdb import fetch_ratings
+                    ir, rt, raw_title = fetch_ratings(title, year)
+                    if ir or rt:
+                        imdb_rating = float(ir or 0.0)
+                        rt_score = int(rt or 0)
+                        source = "OMDb-title (fallback)"
 
                 # --- Debug log before updating Firestore ---
                 st.info(f"🎬 Refresh Debug → Title='{title}' ({year}) | IMDb ID={imdb_id} | IMDb={imdb_rating} | RT={rt_score}")
