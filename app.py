@@ -172,6 +172,17 @@ def read_seed_rating(imdb_id: str):
                         rt_val = int(float(rt)) if rt not in (None, "", "N/A") else None
                     except Exception:
                         rt_val = None
+                    # If both are missing/invalid/zero, return None so OMDb fallback works
+                    imdb_invalid = ir_val in (None, 0, 0.0)
+                    rt_invalid = rt_val in (None, 0)
+                    # Special case: IMDb rating string "0.0"
+                    if isinstance(ir, str) and ir.strip() in ("0", "0.0"):
+                        imdb_invalid = True
+                    if isinstance(rt, str) and rt.strip() == "0":
+                        rt_invalid = True
+                    # Also treat "N/A" as invalid (already handled above)
+                    if imdb_invalid and rt_invalid:
+                        return None
                     return {"imdb_rating": ir_val, "rt": rt_val}
     except Exception:
         pass
