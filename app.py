@@ -1,5 +1,6 @@
 from tmdb import search_movie, search_tv, search_by_actor
 from omdb import get_ratings
+from omdb import fetch_ratings
 import csv
 from pathlib import Path
 import streamlit as st
@@ -580,9 +581,6 @@ if query:
 
             if st.button("Add to Favorites", key=f"btn_{item['id']}"):
                 media_key = "movie" if media_type == "Movie" else ("show" if media_type == "TV Show" else "movie")
-
-                from omdb import get_ratings, fetch_ratings  # ÜSTE ekli olsun
-
                 # 1) IMDb ID garanti altına al
                 imdb_id = (item.get("imdb") or "").strip()
                 if not imdb_id or imdb_id == "tt0000000":
@@ -611,12 +609,11 @@ if query:
                         raw_id = (stats.get("raw") or {})
                         source = "CSV/OMDb-ID" if raw_id else None  # get_ratings CSV'den dönerse raw boş kalabilir
 
-                # c) hâlâ boşsa OMDb by Title/Year
-                if not stats or ((stats.get("imdb_rating") in (None, 0, "N/A")) and (stats.get("rt") in (None, 0, "N/A"))):
+                # OMDb-ID fallback: if both ratings are 0, try fetch_ratings by title/year
+                if not stats or (float(stats.get("imdb_rating") or 0) == 0.0 and int(stats.get("rt") or 0) == 0):
                     ir, rt, raw_title = fetch_ratings(item["title"], item.get("year"))
                     stats = {"imdb_rating": ir, "rt": rt}
-                    if not source:
-                        source = "OMDb-title"
+                    source = "OMDb-title (auto-fallback)"
 
                 imdb_rating = float(stats.get("imdb_rating") or 0.0)
                 rt_score    = int(stats.get("rt") or 0)
@@ -748,25 +745,14 @@ def show_favorites(fav_type, label):
                         raw_id = (stats.get("raw") or {})
                         source = "CSV/OMDb-ID" if raw_id else None
 
-                # 2c) Still missing → OMDb by Title/Year
-                if not stats or ((stats.get("imdb_rating") in (None, 0, "N/A")) and (stats.get("rt") in (None, 0, "N/A"))):
-                    from omdb import fetch_ratings
+                # OMDb-ID fallback: if both ratings are 0, try fetch_ratings by title/year
+                if not stats or (float(stats.get("imdb_rating") or 0) == 0.0 and int(stats.get("rt") or 0) == 0):
                     ir, rt, raw_title = fetch_ratings(title, year)
                     stats = {"imdb_rating": ir, "rt": rt}
-                    if not source:
-                        source = "OMDb-title"
+                    source = "OMDb-title (auto-fallback)"
 
                 imdb_rating = float(stats.get("imdb_rating") or 0.0)
                 rt_score = int(stats.get("rt") or 0)
-
-                # Fallback: If both IMDb and RT are 0, try fetching by Title/Year again
-                if imdb_rating == 0.0 and rt_score == 0:
-                    from omdb import fetch_ratings
-                    ir, rt, raw_title = fetch_ratings(title, year)
-                    if ir or rt:
-                        imdb_rating = float(ir or 0.0)
-                        rt_score = int(rt or 0)
-                        source = "OMDb-title (fallback)"
 
                 # --- Debug log before updating Firestore ---
                 st.info(f"🎬 Refresh Debug → Title='{title}' ({year}) | IMDb ID={imdb_id} | IMDb={imdb_rating} | RT={rt_score}")
