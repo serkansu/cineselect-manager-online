@@ -421,13 +421,22 @@ def ensure_authenticated():
             const i2 = document.createElement('input'); i2.name = 'password'; i2.value = p; f.appendChild(i2);
             document.body.appendChild(f);
             try{ f.submit(); }catch(e){ /* ignore */ }
-            // 2) small timeout to allow browser detect POST, then navigate main window with password in query (so Streamlit can read it)
-            setTimeout(function(){
-              const params = new URLSearchParams(window.location.search);
-              params.set('password', p);
-              // preserve other params if any
-              window.location.search = params.toString();
-            }, 250);
+            // 2) Parolayı sessionStorage'a koy, postMessage ile gönder, sonra sessionStorage'dan hemen sil
+            sessionStorage.setItem('ss_pw', p);
+            window.postMessage({type: 'ss_pw', pw: p}, '*');
+            setTimeout(function(){ sessionStorage.removeItem('ss_pw'); }, 500);
+          });
+
+          // Listener: ss_pw mesajını yakala ve password paramını ekle
+          window.addEventListener('message', function(ev){
+            if (ev && ev.data && ev.data.type === 'ss_pw') {
+              // sessionStorage temizlendikten hemen sonra URL'ye ekle
+              setTimeout(function(){
+                const params = new URLSearchParams(window.location.search);
+                params.set('password', ev.data.pw);
+                window.location.search = params.toString();
+              }, 525); // sessionStorage.removeItem'dan hemen sonra
+            }
           });
         })();
       </script>
