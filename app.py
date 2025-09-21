@@ -656,14 +656,14 @@ if query:
 
             st.markdown(f"**{idx+1}. {item['title']} ({item.get('year', '—')})**")
 
-            # IMDb rating display: prefer explicit imdbRating; if not present, use numeric `imdb` when it is a rating
-            _imdb_rating_field = item.get("imdbRating", None)
-            if isinstance(_imdb_rating_field, (int, float)):
-                imdb_display = f"{float(_imdb_rating_field):.1f}" if _imdb_rating_field > 0 else "N/A"
-            elif isinstance(item.get("imdb"), (int, float)):
-                imdb_display = f"{float(item['imdb']):.1f}" if item["imdb"] > 0 else "N/A"
-            else:
+            imdb_val = item.get("imdbRating")
+            if imdb_val in (None, "", "N/A") or (isinstance(imdb_val, (int, float)) and float(imdb_val) == 0.0):
                 imdb_display = "N/A"
+            else:
+                try:
+                    imdb_display = f"{float(imdb_val):.1f}"
+                except:
+                    imdb_display = "N/A"
 
             rt_val = item.get("rt", 0)
             rt_display = f"{int(rt_val)}%" if isinstance(rt_val, (int, float)) and rt_val > 0 else "N/A"
@@ -794,7 +794,14 @@ def show_favorites(fav_type, label):
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
-        imdb_display = f"{float(fav.get('imdbRating', 0) or 0):.1f}" if (fav.get("imdbRating") not in (None, "", "N/A")) else "N/A"
+        imdb_val = fav.get("imdbRating")
+        if imdb_val in (None, "", "N/A") or (isinstance(imdb_val, (int, float)) and float(imdb_val) == 0.0):
+            imdb_display = "N/A"
+        else:
+            try:
+                imdb_display = f"{float(imdb_val):.1f}"
+            except:
+                imdb_display = "N/A"
         rt_display = f"{fav['rt']}%" if isinstance(fav["rt"], (int, float)) else "N/A"
         cols = st.columns([1, 5, 1, 1])
         with cols[0]:
