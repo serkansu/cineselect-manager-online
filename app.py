@@ -1,14 +1,22 @@
 def validate_imdb_id(imdb_id, title=None, year=None):
     """
     IMDb ID'nin OMDb'de geçerli olup olmadığını kontrol eder.
-    Eğer geçerli değilse, fetch_ratings ile doğru IMDb ID'yi bulmaya çalışır.
+    Öncelikle seed_ratings.csv'yi kontrol eder. Eğer orada geçerli rating varsa imdb_id'yi döndürür.
+    Eğer geçerli değilse, OMDb'den kontrol eder. Eğer OMDb'de geçerli rating varsa imdb_id'yi döndürür.
+    Eğer OMDb'den de alınamazsa, fetch_ratings ile doğru IMDb ID'yi bulmaya çalışır.
     Doğru ID bulunursa onu döndürür, yoksa None döner.
     """
+    # 1. Öncelikle seed_ratings.csv'yi kontrol et
+    if imdb_id and imdb_id != "tt0000000":
+        seed_stats = read_seed_rating(imdb_id)
+        if seed_stats and (seed_stats.get("imdb_rating") or seed_stats.get("rt")):
+            return imdb_id
+    # 2. OMDb'de kontrol et
     if imdb_id and imdb_id != "tt0000000":
         stats = get_ratings(imdb_id)
         if stats and (stats.get("imdb_rating") or stats.get("rt")):
             return imdb_id
-    # OMDb'den rating alınamadıysa veya imdb_id eksikse, fetch_ratings ile deneriz
+    # 3. OMDb'den rating alınamadıysa veya imdb_id eksikse, fetch_ratings ile deneriz
     if title:
         ir, rt, raw = fetch_ratings(title, year)
         # raw dict ise ve imdbID varsa ve başında "tt" ile başlıyorsa
