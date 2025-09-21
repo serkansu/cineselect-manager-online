@@ -370,7 +370,7 @@ def ensure_authenticated():
     st.markdown(login_form, unsafe_allow_html=True)
 
     # Check for submitted password in query params (Streamlit workaround)
-    pw = st.experimental_get_query_params().get("password", [None])[0]
+    pw = st.query_params.get("password", [None])[0]
     if pw and pw == key:
         st.session_state["_auth_ok"] = True
         st.rerun()
