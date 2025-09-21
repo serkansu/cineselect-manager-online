@@ -703,22 +703,63 @@ def show_favorites(fav_type, label):
             st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
             # --- Refresh Button for each favorite (IMDb & RT) ---
             if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
-                imdb_id = fav.get("imdb")
-                # Eğer imdb_id boşsa TMDb'den al
-                if not imdb_id:
-                    imdb_id = get_imdb_id_from_tmdb(fav.get("title"), fav.get("year"), is_series=(fav.get("type")=="show"))
+                imdb_id = (fav.get("imdb") or "").strip()
+                title = fav.get("title")
+                year = fav.get("year")
+                is_series = (fav.get("type") == "show")
+
+                # 1) IMDb ID guarantee
+                if not imdb_id or imdb_id == "tt0000000":
+                    imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
                     st.info(f"🎬 IMDb ID TMDb'den alındı: {imdb_id}")
-                if imdb_id:
-                    stats = get_ratings(imdb_id)
-                    imdb_rating = stats.get("imdb_rating") if stats else None
-                    rt_score = stats.get("rt") if stats else None
-                    db.collection("favorites").document(fav["id"]).update({
-                        "imdb": imdb_id,
-                        "imdbRating": float(imdb_rating) if imdb_rating is not None else 0.0,
-                        "rt": int(rt_score) if rt_score is not None else 0,
-                    })
-                    st.success(f"✅ {fav['title']} IMDb & RT yenilendi.")
-                    st.rerun()
+
+                stats = {}
+                raw_id = {}
+                raw_title = {}
+                source = None
+
+                # 2a) Try seed_ratings.csv
+                seed_hit = read_seed_rating(imdb_id)
+                if seed_hit and (seed_hit.get("imdb_rating") or seed_hit.get("rt")):
+                    stats = {"imdb_rating": seed_hit.get("imdb_rating"), "rt": seed_hit.get("rt")}
+                    source = "CSV"
+
+                # 2b) If missing/empty → OMDb by ID
+                if not source:
+                    if imdb_id:
+                        stats = get_ratings(imdb_id) or {}
+                        raw_id = (stats.get("raw") or {})
+                        source = "CSV/OMDb-ID" if raw_id else None
+
+                # 2c) Still missing → OMDb by Title/Year
+                if not stats or ((stats.get("imdb_rating") in (None, 0, "N/A")) and (stats.get("rt") in (None, 0, "N/A"))):
+                    from omdb import fetch_ratings
+                    ir, rt, raw_title = fetch_ratings(title, year)
+                    stats = {"imdb_rating": ir, "rt": rt}
+                    if not source:
+                        source = "OMDb-title"
+
+                imdb_rating = float(stats.get("imdb_rating") or 0.0)
+                rt_score = int(stats.get("rt") or 0)
+
+                # Update Firestore
+                db.collection("favorites").document(fav["id"]).update({
+                    "imdb": imdb_id,
+                    "imdbRating": imdb_rating,
+                    "rt": rt_score,
+                })
+
+                # Update seed_ratings.csv
+                append_seed_rating(
+                    imdb_id=imdb_id,
+                    title=title,
+                    year=year,
+                    imdb_rating=imdb_rating,
+                    rt_score=rt_score,
+                )
+
+                st.success(f"✅ {title} IMDb & RT yenilendi. (IMDb={imdb_rating}, RT={rt_score}%)")
+                st.rerun()
             # --- /Refresh Button ---
         with cols[2]:
             if st.button("❌", key=f"remove_{fav['id']}"):
