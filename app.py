@@ -1,3 +1,22 @@
+def validate_imdb_id(imdb_id, title=None, year=None):
+    """
+    IMDb ID'nin OMDb'de geçerli olup olmadığını kontrol eder.
+    Eğer geçerli değilse, fetch_ratings ile doğru IMDb ID'yi bulmaya çalışır.
+    Doğru ID bulunursa onu döndürür, yoksa None döner.
+    """
+    if imdb_id and imdb_id != "tt0000000":
+        stats = get_ratings(imdb_id)
+        if stats and (stats.get("imdb_rating") or stats.get("rt")):
+            return imdb_id
+    # OMDb'den rating alınamadıysa veya imdb_id eksikse, fetch_ratings ile deneriz
+    if title:
+        ir, rt, raw = fetch_ratings(title, year)
+        # raw dict ise ve imdbID varsa ve başında "tt" ile başlıyorsa
+        if isinstance(raw, dict):
+            new_id = raw.get("imdbID") or raw.get("imdb_id")
+            if new_id and isinstance(new_id, str) and new_id.startswith("tt") and new_id != "tt0000000":
+                return new_id
+    return None
 from tmdb import search_movie, search_tv, search_by_actor
 from omdb import get_ratings
 from omdb import fetch_ratings
@@ -357,24 +376,81 @@ def ensure_authenticated():
 
     st.title("🔒 Serkan’s Watchagain (Manager)")
 
-    # Hybrid login: real HTML form so Safari/Face ID can save password
-    st.markdown("""
-    <form action="" method="get">
-        <input type="password" name="password"
-               placeholder="Şifre"
-               autocomplete="current-password"
-               style="padding:8px; font-size:16px;">
-        <input type="submit" value="Giriş"
-               style="padding:8px; font-size:16px;">
-    </form>
-    """, unsafe_allow_html=True)
+    # Visible HTML login form with username+password (autocomplete hints)
+    # We include a small JS routine that: 1) clones the form and POSTS it into a hidden iframe
+    #    so the browser sees a real POST (and offers to save the password / Face ID), and
+    #    2) then navigates the main window to ?password=... so Streamlit can capture it.
+    # This keeps UX smooth and triggers the browser password-manager save prompt.
+    login_html = r'''
+    <div>
+      <form id="ss_login" autocomplete="on">
+        <label style="font-size:14px">Kullanıcı (opsiyonel)</label><br>
+        <input type="text" name="username" id="ss_username" placeholder="Kullanıcı" autocomplete="username" style="padding:8px; font-size:16px; width:260px; margin-bottom:8px;" />
+        <br>
+        <label style="font-size:14px">Şifre</label><br>
+        <input type="password" name="password" id="ss_password" placeholder="Şifre" autocomplete="current-password" style="padding:8px; font-size:16px; width:260px;" />
+        <br><br>
+        <input type="submit" value="Giriş" style="padding:8px 12px; font-size:16px;" />
+      </form>
 
-    pw = st.query_params.get("password")
-    if pw and pw == key:
-        st.session_state["_auth_ok"] = True
-        st.rerun()
-    elif pw:
-        st.error("❌ Hatalı şifre")
+      <!-- hidden iframe used to POST so browser will prompt to save password -->
+      <iframe name="ss_pw_iframe" id="ss_pw_iframe" style="display:none"></iframe>
+
+      <script>
+        (function(){
+          const form = document.getElementById('ss_login');
+          form.addEventListener('submit', function(ev){
+            ev.preventDefault();
+            const u = document.getElementById('ss_username').value || '';
+            const p = document.getElementById('ss_password').value || '';
+            // 1) build a form and POST it into a hidden iframe to trigger browser save
+            const f = document.createElement('form');
+            f.method = 'post';
+            f.action = window.location.pathname || window.location.href;
+            f.target = 'ss_pw_iframe';
+            f.style.display = 'none';
+            const i1 = document.createElement('input'); i1.name = 'username'; i1.value = u; f.appendChild(i1);
+            const i2 = document.createElement('input'); i2.name = 'password'; i2.value = p; f.appendChild(i2);
+            document.body.appendChild(f);
+            try{ f.submit(); }catch(e){ /* ignore */ }
+            // 2) small timeout to allow browser detect POST, then navigate main window with password in query (so Streamlit can read it)
+            setTimeout(function(){
+              const params = new URLSearchParams(window.location.search);
+              params.set('password', p);
+              // preserve other params if any
+              window.location.search = params.toString();
+            }, 250);
+          });
+        })();
+      </script>
+    </div>
+    '''
+
+    st.markdown(login_html, unsafe_allow_html=True)
+
+    # Read password from query params (string or None)
+    pw = st.query_params.get('password')
+    if pw:
+        # In some Streamlit versions pw can be list; normalize
+        if isinstance(pw, list):
+            pw = pw[0]
+        if pw == key:
+            st.session_state['_auth_ok'] = True
+            # Clear password from URL after successful login to avoid leaking it in history
+            # Navigate to same path without query string using JS snippet
+            st.markdown("""
+                <script>
+                  (function(){
+                    try{
+                      const url = window.location.pathname;
+                      window.history.replaceState({}, document.title, url);
+                    }catch(e){/* ignore */}
+                  })();
+                </script>
+            """, unsafe_allow_html=True)
+            st.rerun()
+        else:
+            st.error('❌ Hatalı şifre')
 
     st.stop()
 # --- /auth gate ---
@@ -592,6 +668,9 @@ if query:
                         is_series=(media_key == "show"),
                 )
 
+                # IMDb ID doğrulama/düzeltme
+                imdb_id = validate_imdb_id(imdb_id, item["title"], item.get("year")) or imdb_id
+
                 # 2) IMDb/RT puanlarını getir (ÖNCE yerel CSV, yoksa OMDb-ID, o da yoksa Title/Year)
                 stats = {}
                 raw_id = {}
@@ -723,11 +802,12 @@ def show_favorites(fav_type, label):
                 title = fav.get("title")
                 year = fav.get("year")
                 is_series = (fav.get("type") == "show")
-
                 # 1) IMDb ID guarantee
                 if not imdb_id or imdb_id == "tt0000000":
                     imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
                     st.info(f"🎬 IMDb ID TMDb'den alındı: {imdb_id}")
+                # IMDb ID doğrulama/düzeltme (OMDb sorgusundan önce)
+                imdb_id = validate_imdb_id(imdb_id, title, year) or imdb_id
 
                 stats = {}
                 raw_id = {}
