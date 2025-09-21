@@ -701,18 +701,23 @@ def show_favorites(fav_type, label):
                     st.image(poster_url, width=120)
         with cols[1]:
             st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
-            # --- Refresh Button for each favorite ---
-            if st.button("🔄 Refresh", key=f"refresh_{fav['id']}"):
+            # --- Refresh Button for each favorite (IMDb & RT) ---
+            if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
                 imdb_id = fav.get("imdb")
+                # Eğer imdb_id boşsa TMDb'den al
+                if not imdb_id:
+                    imdb_id = get_imdb_id_from_tmdb(fav.get("title"), fav.get("year"), is_series=(fav.get("type")=="show"))
+                    st.info(f"🎬 IMDb ID TMDb'den alındı: {imdb_id}")
                 if imdb_id:
                     stats = get_ratings(imdb_id)
                     imdb_rating = stats.get("imdb_rating") if stats else None
                     rt_score = stats.get("rt") if stats else None
                     db.collection("favorites").document(fav["id"]).update({
+                        "imdb": imdb_id,
                         "imdbRating": float(imdb_rating) if imdb_rating is not None else 0.0,
                         "rt": int(rt_score) if rt_score is not None else 0,
                     })
-                    st.success(f"✅ {fav['title']} ratings refreshed.")
+                    st.success(f"✅ {fav['title']} IMDb & RT yenilendi.")
                     st.rerun()
             # --- /Refresh Button ---
         with cols[2]:
