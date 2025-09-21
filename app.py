@@ -337,25 +337,33 @@ def _sync_cs_from_input(src_key: str, dst_key: str):
 # --- Simple session-based auth gate using an env var ---
 def ensure_authenticated():
     """If APP_ACCESS_KEY is set in env, ask for it once per browser tab.
-    When correct, remember in st.session_state until the tab is closed or refreshed.
+    Supports Enter key submit and browser password managers (Face ID, Safari/iOS Keychain).
     """
     key = (os.getenv("APP_ACCESS_KEY") or "").strip()
     if not key:
-        # No key configured -> app stays public
         return
 
     if st.session_state.get("_auth_ok", False):
         return
 
     st.title("🔒 Serkan’s Watchagain (Manager)")
-    st.info("Bu sayfa şifre ile korunuyor. Lütfen erişim anahtarını girin.")
-    pw = st.text_input("Şifre", type="password", key="__app_pw")
-    if st.button("Giriş", key="__app_login"):
-        if pw == key:
-            st.session_state["_auth_ok"] = True
-            st.rerun()
-        else:
-            st.error("Yanlış şifre. Tekrar deneyin.")
+
+    # Standard HTML form so browsers can offer to remember password (Face ID, Keychain, etc.)
+    login_form = """
+    <form action="" method="post">
+      <input type="password" name="password" placeholder="Şifre"
+             autocomplete="current-password" style="padding:8px; font-size:16px;">
+      <input type="submit" value="Giriş" style="padding:8px; font-size:16px;">
+    </form>
+    """
+    st.markdown(login_form, unsafe_allow_html=True)
+
+    # Check for submitted password in query params (Streamlit workaround)
+    pw = st.experimental_get_query_params().get("password", [None])[0]
+    if pw and pw == key:
+        st.session_state["_auth_ok"] = True
+        st.rerun()
+
     st.stop()
 # --- /auth gate ---
 
