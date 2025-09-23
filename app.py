@@ -1,10 +1,41 @@
+# --- Tek seferde Firestore'dan tüm favoriler çek ---
+all_docs = [doc.to_dict() for doc in db.collection("favorites").stream()]
+
+# --- Director filtresi ---
+all_directors = sorted({d for doc in all_docs for d in (doc.get("directors") or [])})
+filter_directors = st.multiselect("🎬 Filter by Director", all_directors)
+
+# --- Actor filtresi ---
+if filter_directors:
+    relevant_docs = [doc for doc in all_docs if any(d in (doc.get("directors") or []) for d in filter_directors)]
+else:
+    relevant_docs = all_docs
+all_actors = sorted({a for doc in relevant_docs for a in (doc.get("cast") or [])})
+filter_actors = st.multiselect("🎭 Filter by Actor", all_actors)
+
+# --- Genre filtresi ---
+all_genres = sorted({g for doc in relevant_docs for g in (doc.get("genres") or [])})
+filter_genres = st.multiselect("🎞️ Filter by Genre", all_genres)
 def read_seed_meta(imdb_id: str):
     """
-    seed_ratings.csv içinden imdb_id ile eşleşen satırın metadata'sını döndürür.
+    seed_meta.csv içinden imdb_id ile eşleşen satırın metadata'sını döndürür.
     {'directors': [...], 'cast': [...], 'genres': [...]} veya None.
-    (Gerçek implementasyon burada yok, örnek için pass.)
     """
-    # Burada gerçek implementasyon olmalı; örnek olarak None döndür.
+    try:
+        iid = (imdb_id or "").strip()
+        if not iid or not SEED_META_PATH.exists():
+            return None
+        with SEED_META_PATH.open(newline="", encoding="utf-8") as f:
+            r = csv.DictReader(f)
+            for row in r:
+                if (row.get("imdb_id") or "").strip() == iid:
+                    return {
+                        "directors": [d.strip() for d in (row.get("directors") or "").split(";") if d.strip()],
+                        "cast": [c.strip() for c in (row.get("cast") or "").split(";") if c.strip()],
+                        "genres": [g.strip() for g in (row.get("genres") or "").split(";") if g.strip()],
+                    }
+    except Exception as e:
+        print("read_seed_meta error:", e)
     return None
 
 def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
@@ -936,6 +967,17 @@ def get_sort_key(fav):
 def show_favorites(fav_type, label):
     docs = db.collection("favorites").where("type", "==", fav_type).stream()
     favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
+    # Apply director filter(s) if selected
+    if filter_directors:
+        favorites = [f for f in favorites if any(d in (f.get("directors") or []) for d in filter_directors)]
+
+    # Apply actor filter(s) if selected
+    if filter_actors:
+        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in filter_actors)]
+
+    # Apply genre filter(s) if selected
+    if filter_genres:
+        favorites = [f for f in favorites if any(g in (f.get("genres") or []) for g in filter_genres)]
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
