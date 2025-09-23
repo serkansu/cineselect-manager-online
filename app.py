@@ -709,21 +709,6 @@ except Exception as e:
 # --- Tek seferde Firestore'dan tüm favoriler çek ---
 all_docs = [doc.to_dict() for doc in db.collection("favorites").stream()]
 
-# --- Director filtresi ---
-all_directors = sorted({d for doc in all_docs for d in (doc.get("directors") or [])})
-filter_directors = st.multiselect("🎬 Filter by Director", all_directors)
-
-# --- Actor filtresi ---
-if filter_directors:
-    relevant_docs = [doc for doc in all_docs if any(d in (doc.get("directors") or []) for d in filter_directors)]
-else:
-    relevant_docs = all_docs
-all_actors = sorted({a for doc in relevant_docs for a in (doc.get("cast") or [])})
-filter_actors = st.multiselect("🎭 Filter by Actor", all_actors)
-
-# --- Genre filtresi ---
-all_genres = sorted({g for doc in relevant_docs for g in (doc.get("genres") or [])})
-filter_genres = st.multiselect("🎞️ Filter by Genre", all_genres)
 # Firestore'dan verileri çek ve session'a yaz
 movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
 series_docs = db.collection("favorites").where("type", "==", "show").stream()
@@ -957,6 +942,47 @@ if query:
 st.divider()
 st.subheader("❤️ Your Favorites")
 sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], index=2)
+
+all_directors = sorted({d for doc in all_docs for d in (doc.get("directors") or [])})
+if all_directors:
+    directors = all_directors
+else:
+    directors = []
+
+# Apply director filter to get relevant docs for next filters
+selected_directors = []
+selected_actors = []
+selected_genres = []
+
+if 'selected_directors' in locals():
+    pass  # placeholder
+
+if 'selected_directors' in locals() and selected_directors:
+    relevant_docs = [doc for doc in all_docs if any(d in (doc.get("directors") or []) for d in selected_directors)]
+else:
+    relevant_docs = all_docs
+
+all_actors = sorted({a for doc in relevant_docs for a in (doc.get("cast") or [])})
+if all_actors:
+    actors = all_actors
+else:
+    actors = []
+
+all_genres = sorted({g for doc in relevant_docs for g in (doc.get("genres") or [])})
+if all_genres:
+    genres = all_genres
+else:
+    genres = []
+
+# --- Unified filter row ---
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    selected_directors = st.multiselect("🎬 Filter by Director", directors, default=None)
+with col2:
+    selected_actors = st.multiselect("🎭 Filter by Actor", actors, default=None)
+with col3:
+    selected_genres = st.multiselect("🎞 Filter by Genre", genres, default=None)
     
 def get_sort_key(fav):
     try:
@@ -975,16 +1001,16 @@ def show_favorites(fav_type, label):
     docs = db.collection("favorites").where("type", "==", fav_type).stream()
     favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
     # Apply director filter(s) if selected
-    if filter_directors:
-        favorites = [f for f in favorites if any(d in (f.get("directors") or []) for d in filter_directors)]
+    if selected_directors:
+        favorites = [f for f in favorites if any(d in (f.get("directors") or []) for d in selected_directors)]
 
     # Apply actor filter(s) if selected
-    if filter_actors:
-        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in filter_actors)]
+    if selected_actors:
+        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in selected_actors)]
 
     # Apply genre filter(s) if selected
-    if filter_genres:
-        favorites = [f for f in favorites if any(g in (f.get("genres") or []) for g in filter_genres)]
+    if selected_genres:
+        favorites = [f for f in favorites if any(g in (f.get("genres") or []) for g in selected_genres)]
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
