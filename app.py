@@ -64,6 +64,12 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
                         genres = []
                         if isinstance(results[0].get("genres"), list):
                             genres = [g.get("name") for g in results[0].get("genres", []) if g.get("name")]
+                        # --- TV Show creators fallback ---
+                        if search_type == "tv":
+                            creators = [c.get("name") for c in results[0].get("created_by", []) if c.get("name")]
+                            if creators and not directors:
+                                directors = creators
+                        # --- /TV Show creators fallback ---
                         if directors or cast or genres:
                             return {"directors": directors, "cast": cast, "genres": genres}
     except Exception as e:
@@ -1064,7 +1070,7 @@ def show_favorites(fav_type, label):
                 directors_html = " ".join(
                     f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
                     # Use append instead of set for multi-select
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.search=params.toString(); }})()">{d}</span>'
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); }})()">{d}</span>'
                     for d in directors
                 )
                 st.markdown(f'<span>🎬 <b>Directors:</b></span> {directors_html}', unsafe_allow_html=True)
@@ -1073,7 +1079,7 @@ def show_favorites(fav_type, label):
                 cast_html = " ".join(
                     f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
                     # Use append instead of set for multi-select
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.search=params.toString(); }})()">{c}</span>'
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); }})()">{c}</span>'
                     for c in cast
                 )
                 st.markdown(f'<span>🎭 <b>Cast:</b></span> {cast_html}', unsafe_allow_html=True)
