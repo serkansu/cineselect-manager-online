@@ -14,10 +14,36 @@ for param, sskey in [
         val = val[0] if val else None
     if val:
         st.session_state[sskey] = val
+
     else:
         # Only clear if not present in query params (don't clear if already set by button)
         if sskey not in st.session_state:
             st.session_state[sskey] = None
+
+# Eksik metadata durumunda missing_metadata.csv dosyasına ekleme fonksiyonu
+import csv
+
+def append_missing_meta(title, year, imdb_id="", note=""):
+    """
+    Eksik metadata durumunda missing_metadata.csv dosyasına ekler.
+    """
+    try:
+        file_exists = False
+        try:
+            with open("missing_metadata.csv", "r", newline="", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                headers = next(reader, None)
+                file_exists = headers is not None
+        except FileNotFoundError:
+            file_exists = False
+
+        with open("missing_metadata.csv", "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["title", "year", "imdb_id", "note"])
+            writer.writerow([title, year, imdb_id, note])
+    except Exception as e:
+        print(f"append_missing_meta error: {e}")
 
 # Eksik csv dosyalarını garantiye al
 import os
