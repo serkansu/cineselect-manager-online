@@ -1042,32 +1042,23 @@ def show_favorites(fav_type, label):
             # --- Directors and Cast block ---
             directors = fav.get("directors", [])
             cast = fav.get("cast", [])
-            # --- Render clickable buttons for directors ---
+            # --- Refactored clickable buttons for directors ---
             if directors:
-                st.markdown("🎬 <b>Directors:</b>", unsafe_allow_html=True)
-                dir_btns = []
-                dir_cols = st.columns(len(directors)) if len(directors) > 1 else [st]
-                for i, director in enumerate(directors):
-                    btn_key = f"director_link_{fav['id']}_{director}"
+                st.write("🎬 **Directors:**")
+                dir_cols = st.columns(len(directors))
+                for i, d in enumerate(directors):
                     with dir_cols[i]:
-                        if st.button(director, key=btn_key):
-                            # Update selected_directors in session_state
-                            sel = st.session_state.get("selected_directors", [])
-                            if director not in sel:
-                                st.session_state["selected_directors"] = sel + [director]
+                        if st.button(d, key=f"dir_{fav['id']}_{i}"):
+                            st.session_state["selected_directors"] = [d]
                             st.rerun()
-            # --- Render clickable buttons for cast ---
+            # --- Refactored clickable buttons for cast ---
             if cast:
-                st.markdown("🎭 <b>Cast:</b>", unsafe_allow_html=True)
-                cast_btns = []
-                cast_cols = st.columns(len(cast)) if len(cast) > 1 else [st]
-                for i, actor in enumerate(cast):
-                    btn_key = f"actor_link_{fav['id']}_{actor}"
-                    with cast_cols[i]:
-                        if st.button(actor, key=btn_key):
-                            sel = st.session_state.get("selected_actors", [])
-                            if actor not in sel:
-                                st.session_state["selected_actors"] = sel + [actor]
+                st.write("🎭 **Cast:**")
+                cast_cols = st.columns(min(len(cast), 4))
+                for i, c in enumerate(cast):
+                    with cast_cols[i % 4]:
+                        if st.button(c, key=f"cast_{fav['id']}_{i}"):
+                            st.session_state["selected_actors"] = [c]
                             st.rerun()
             # --- Refresh Button for each favorite (IMDb & RT) ---
             if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
