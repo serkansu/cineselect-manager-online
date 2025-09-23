@@ -774,6 +774,17 @@ def sync_with_firebase(sort_mode="cc"):
                 item["rt"] = int(rt_score) if rt_score is not None else 0
                 # ⬇️ YENİ: seed_ratings.csv’ye (yoksa) ekle
                 append_seed_rating(imdb_id, title, year, imdb_rating, rt_score)
+                # ⬇️ YENİ: seed_meta.csv ve Firestore için meta kaydet
+                append_seed_meta(
+                    imdb_id,
+                    title,
+                    year,
+                    {
+                        "directors": item.get("directors", []),
+                        "cast": item.get("cast", []),
+                        "genres": item.get("genres", []),
+                    }
+                )
     # seed_ratings.csv içinde her favorinin olduğundan emin ol (CSV'de zaten varsa eklenmez)
     for _section in ("movies", "shows"):
         for _it in favorites_data.get(_section, []):
@@ -1135,6 +1146,9 @@ def show_favorites(fav_type, label):
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
+        # Handle TV show creators as directors if directors missing
+        if fav.get("type") == "show" and not fav.get("directors") and fav.get("created_by"):
+            fav["directors"] = fav.get("created_by", [])
         imdb_val = fav.get("imdbRating")
         if imdb_val in (None, "", "N/A") or (isinstance(imdb_val, (int, float)) and float(imdb_val) == 0.0):
             imdb_display = "N/A"
