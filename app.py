@@ -632,7 +632,7 @@ def sync_with_firebase(sort_mode="cc"):
         "shows": st.session_state.get("favorite_series", [])
     }
     fix_invalid_imdb_ids(favorites_data)  # IMDb puanı olanları temizle
-        # IMDb düzeltmesinden sonra type alanını normalize et
+    # IMDb düzeltmesinden sonra type alanını normalize et
     for section in ["movies", "shows"]:
         for item in favorites_data[section]:
             t = item.get("type", "").lower()
@@ -640,8 +640,8 @@ def sync_with_firebase(sort_mode="cc"):
                 item["type"] = "show"
             elif t in ["movie", "film"]:
                 item["type"] = "movie"
-# IMDb ID eksikse ➜ tamamlama başlıyor
-        # Eksik imdb id'leri tamamla
+    # IMDb ID eksikse ➜ tamamlama başlıyor
+    # Eksik imdb id'leri tamamla
     for section in ["movies", "shows"]:
         for item in favorites_data[section]:
             if not item.get("imdb") or item.get("imdb") == "":
@@ -943,36 +943,35 @@ st.divider()
 st.subheader("❤️ Your Favorites")
 sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], index=2)
 
-all_directors = sorted({d for doc in all_docs for d in (doc.get("directors") or [])})
-if all_directors:
-    directors = all_directors
-else:
-    directors = []
 
-# Apply director filter to get relevant docs for next filters
+# Build directors, actors, genres lists based on selected media_type
+if media_type == "Movie":
+    source_docs = db.collection("favorites").where("type", "==", "movie").stream()
+elif media_type == "TV Show":
+    source_docs = db.collection("favorites").where("type", "==", "show").stream()
+else:
+    source_docs = []
+
+directors = sorted({d for doc in source_docs for d in (doc.to_dict().get("directors") or [])})
+if media_type == "Movie":
+    source_docs = db.collection("favorites").where("type", "==", "movie").stream()
+elif media_type == "TV Show":
+    source_docs = db.collection("favorites").where("type", "==", "show").stream()
+else:
+    source_docs = []
+actors = sorted({a for doc in source_docs for a in (doc.to_dict().get("cast") or [])})
+if media_type == "Movie":
+    source_docs = db.collection("favorites").where("type", "==", "movie").stream()
+elif media_type == "TV Show":
+    source_docs = db.collection("favorites").where("type", "==", "show").stream()
+else:
+    source_docs = []
+genres = sorted({g for doc in source_docs for g in (doc.to_dict().get("genres") or [])})
+
+# Initialize filter selections
 selected_directors = []
 selected_actors = []
 selected_genres = []
-
-if 'selected_directors' in locals():
-    pass  # placeholder
-
-if 'selected_directors' in locals() and selected_directors:
-    relevant_docs = [doc for doc in all_docs if any(d in (doc.get("directors") or []) for d in selected_directors)]
-else:
-    relevant_docs = all_docs
-
-all_actors = sorted({a for doc in relevant_docs for a in (doc.get("cast") or [])})
-if all_actors:
-    actors = all_actors
-else:
-    actors = []
-
-all_genres = sorted({g for doc in relevant_docs for g in (doc.get("genres") or [])})
-if all_genres:
-    genres = all_genres
-else:
-    genres = []
 
 # --- Unified filter row ---
 col1, col2, col3 = st.columns(3)
@@ -1040,6 +1039,36 @@ def show_favorites(fav_type, label):
                     st.image(poster_url, width=120)
         with cols[1]:
             st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
+            # --- Directors and Cast block ---
+            directors = fav.get("directors", [])
+            cast = fav.get("cast", [])
+            # --- Render clickable buttons for directors ---
+            if directors:
+                st.markdown("🎬 <b>Directors:</b>", unsafe_allow_html=True)
+                dir_btns = []
+                dir_cols = st.columns(len(directors)) if len(directors) > 1 else [st]
+                for i, director in enumerate(directors):
+                    btn_key = f"director_link_{fav['id']}_{director}"
+                    with dir_cols[i]:
+                        if st.button(director, key=btn_key):
+                            # Update selected_directors in session_state
+                            sel = st.session_state.get("selected_directors", [])
+                            if director not in sel:
+                                st.session_state["selected_directors"] = sel + [director]
+                            st.rerun()
+            # --- Render clickable buttons for cast ---
+            if cast:
+                st.markdown("🎭 <b>Cast:</b>", unsafe_allow_html=True)
+                cast_btns = []
+                cast_cols = st.columns(len(cast)) if len(cast) > 1 else [st]
+                for i, actor in enumerate(cast):
+                    btn_key = f"actor_link_{fav['id']}_{actor}"
+                    with cast_cols[i]:
+                        if st.button(actor, key=btn_key):
+                            sel = st.session_state.get("selected_actors", [])
+                            if actor not in sel:
+                                st.session_state["selected_actors"] = sel + [actor]
+                            st.rerun()
             # --- Refresh Button for each favorite (IMDb & RT) ---
             if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
                 imdb_id = (fav.get("imdb") or "").strip()
@@ -1128,7 +1157,7 @@ def show_favorites(fav_type, label):
                 key=i_key, on_change=_sync_cs_from_input, args=(i_key, s_key)
             )
 
-            cols_edit = st.columns([1,1,2])
+            cols_edit = st.columns([1, 1, 2])
             with cols_edit[0]:
                 if st.button("✅ Kaydet", key=f"save_{fav['id']}"):
                     new_val = _clamp_cs(st.session_state.get(i_key, st.session_state.get(s_key, current)))
