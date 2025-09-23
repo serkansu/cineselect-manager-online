@@ -1114,19 +1114,19 @@ def show_favorites(fav_type, label):
 
             # Directors
             if fav.get("directors"):
-                st.write("🎬 **Directors:** ", end="")
+                st.markdown("🎬 **Directors:**", unsafe_allow_html=True)
                 for d in fav["directors"]:
                     clickable_text(d, f"dir_{fav['id']}_{d}", "director")
 
             # Cast
             if fav.get("cast"):
-                st.write("🎭 **Cast:** ", end="")
+                st.markdown("🎭 **Cast:**", unsafe_allow_html=True)
                 for c in fav["cast"]:
                     clickable_text(c, f"cast_{fav['id']}_{c}", "actor")
 
             # Genres
             if fav.get("genres"):
-                st.write("📚 **Genres:** ", end="")
+                st.markdown("📚 **Genres:**", unsafe_allow_html=True)
                 for g in fav["genres"]:
                     clickable_text(g, f"genre_{fav['id']}_{g}", "genre")
 
