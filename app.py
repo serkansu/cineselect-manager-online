@@ -551,21 +551,7 @@ def push_favorites_to_github():
                 pass
         else:
             st.success(f"✅ Push OK: {file_path} → {repo_owner}/{repo_name}")
-
-# --- Firebase Firestore setup ---
-import firebase_admin
-from firebase_admin import credentials, firestore
-
-def get_firestore():
-    if not firebase_admin._apps:
-        key_json = os.getenv("FIREBASE_KEY_JSON")
-        if not key_json:
-            raise ValueError("❌ FIREBASE_KEY_JSON environment variable is missing")
-        cred_dict = json.loads(key_json)
-        cred = credentials.Certificate(cred_dict)
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app(cred)
-    return firestore.client()
+from firebase_setup import get_firestore
 def fix_invalid_imdb_ids(data):
     for section in ["movies", "shows"]:
         for item in data[section]:
@@ -1151,18 +1137,13 @@ def show_favorites(fav_type, label):
             def link_list(items, filter_type, emoji, label):
                 if not items:
                     return
-                st.markdown(f"{emoji} <b>{label}:</b>", unsafe_allow_html=True)
-                link_strs = []
-                for name in items:
-                    button_key = f"{filter_type}_{name}_{fav['id']}"
-                    if st.button(name, key=button_key):
-                        st.session_state[f"filter_{filter_type}"] = name
-                        st.rerun()
-                    # visually show as link (but the clickable is the button above)
-                    link_strs.append(
-                        f"<span style='color:#3498db; text-decoration:underline; margin-right:8px; cursor:pointer;'>{name}</span>"
-                    )
-                st.markdown(" ".join(link_strs), unsafe_allow_html=True)
+                filter_param = f"filter_{filter_type}"
+                links = [
+                    f"<a href='?{filter_param}={urllib.parse.quote(name)}' "
+                    f"style='color:#3498db; text-decoration:underline; margin-right:8px;'>{name}</a>"
+                    for name in items
+                ]
+                st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
             # Directors
             if fav.get("directors"):
