@@ -125,13 +125,17 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
                             creators = [c.get("name") for c in results[0].get("created_by", []) if c.get("name")]
                             if creators and not directors:
                                 directors = creators
+                        # Safeguard: For TV, if still no directors, set to ["Unknown"]
+                        if search_type == "tv" and not directors:
+                            directors = ["Unknown"]
                         # --- /TV Show creators fallback ---
                         if directors or cast or genres:
                             return {"directors": directors, "cast": cast, "genres": genres}
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
-    return None
+    # If both OMDb and TMDB fail, return genres = ["Unknown"] and directors = ["Unknown"]
+    return {"directors": ["Unknown"], "cast": [], "genres": ["Unknown"]}
 
 def backfill_metadata():
     db = get_firestore()
@@ -164,10 +168,20 @@ def backfill_metadata():
 
         meta = read_seed_meta(imdb_id)
         meta_source = "seed"
+        # If meta exists but genres are missing, try to fetch again from OMDb/TMDB
+        if meta and not meta.get("genres"):
+            # Genre boş → OMDb/TMDB’den tekrar dene
+            new_meta = fetch_metadata(imdb_id, title, year, is_series=(type_name == "show"))
+            if new_meta and new_meta.get("genres"):
+                meta["genres"] = new_meta["genres"]
+                meta_source = "fetch"
         if not meta:
             meta = fetch_metadata(imdb_id, title, year, is_series=(type_name == "show"))
             meta_source = "fetch"
             time.sleep(0.5)
+            # If fetch_metadata returns None (should not anymore), set genres to ["Unknown"]
+            if meta is None:
+                meta = {"directors": [], "cast": [], "genres": ["Unknown"]}
 
         if meta and (meta.get("directors") or meta.get("cast") or meta.get("genres")):
             # Ensure genres is not empty; if so, set to ["Unknown"]
@@ -1288,6 +1302,18 @@ def show_favorites(fav_type, label):
             if i_key not in st.session_state:
                 st.session_state[i_key] = current
 
+            # --- Editable fields for directors, cast, genres (single-line text_area) ---
+            dir_key = f"edit_dirs_{fav['id']}"
+            cast_key = f"edit_cast_{fav['id']}"
+            genres_key = f"edit_genres_{fav['id']}"
+            # Pre-populate with joined string
+            if dir_key not in st.session_state:
+                st.session_state[dir_key] = "; ".join(fav.get("directors", []))
+            if cast_key not in st.session_state:
+                st.session_state[cast_key] = "; ".join(fav.get("cast", []))
+            if genres_key not in st.session_state:
+                st.session_state[genres_key] = "; ".join(fav.get("genres", []))
+
             st.slider(
                 "🎯 CS:", 1, 10000, st.session_state[s_key], step=1,
                 key=s_key, on_change=_sync_cs_from_slider, args=(s_key, i_key)
@@ -1297,11 +1323,50 @@ def show_favorites(fav_type, label):
                 key=i_key, on_change=_sync_cs_from_input, args=(i_key, s_key)
             )
 
+            # Compact editable text areas (single-line each)
+            edit_cols = st.columns(3)
+            with edit_cols[0]:
+                st.text_area(
+                    "Directors", value=st.session_state[dir_key], key=dir_key,
+                    height=28, label_visibility="visible"
+                )
+            with edit_cols[1]:
+                st.text_area(
+                    "Cast", value=st.session_state[cast_key], key=cast_key,
+                    height=28, label_visibility="visible"
+                )
+            with edit_cols[2]:
+                st.text_area(
+                    "Genres", value=st.session_state[genres_key], key=genres_key,
+                    height=28, label_visibility="visible"
+                )
+
             cols_edit = st.columns([1, 1, 2])
             with cols_edit[0]:
                 if st.button("✅ Kaydet", key=f"save_{fav['id']}"):
                     new_val = _clamp_cs(st.session_state.get(i_key, st.session_state.get(s_key, current)))
-                    db.collection("favorites").document(fav["id"]).update({"cineselectRating": new_val})
+                    # Parse directors/cast/genres from textareas (split on ";")
+                    dir_list = [d.strip() for d in (st.session_state.get(dir_key, "") or "").split(";") if d.strip()]
+                    cast_list = [c.strip() for c in (st.session_state.get(cast_key, "") or "").split(";") if c.strip()]
+                    genres_list = [g.strip() for g in (st.session_state.get(genres_key, "") or "").split(";") if g.strip()]
+
+                    db.collection("favorites").document(fav["id"]).update({
+                        "cineselectRating": new_val,
+                        "directors": dir_list,
+                        "cast": cast_list,
+                        "genres": genres_list,
+                    })
+                    # Also update seed_meta.csv
+                    append_seed_meta(
+                        fav.get("imdb") or fav.get("imdb_id") or "",
+                        fav.get("title"),
+                        fav.get("year"),
+                        {
+                            "directors": dir_list,
+                            "cast": cast_list,
+                            "genres": genres_list,
+                        }
+                    )
                     st.success(f"✅ {fav['title']} güncellendi.")
                     st.session_state[f"edit_mode_{fav['id']}"] = False
                     st.rerun()
