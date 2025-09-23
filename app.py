@@ -506,9 +506,11 @@ def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     imdb_id = external_response.json().get("imdb_id", "")
     return imdb_id or ""
 def push_favorites_to_github():
-    """Push favorites.json and seed_ratings.csv to their respective GitHub repos.
+    """Push favorites.json, seed_ratings.csv, seed_meta.csv, and missing_metadata.csv to their respective GitHub repos.
     - favorites.json  -> serkansu/cineselect-addon
     - seed_ratings.csv -> serkansu/cineselect-manager-online
+    - seed_meta.csv -> serkansu/cineselect-manager-online
+    - missing_metadata.csv -> serkansu/cineselect-manager-online
     """
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
