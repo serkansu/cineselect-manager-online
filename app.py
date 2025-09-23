@@ -1,4 +1,12 @@
 import streamlit as st
+
+# Eksik csv dosyalarını garantiye al
+import os
+import pandas as pd
+
+for file_name in ["seed_meta.csv", "missing_metadata.csv"]:
+    if not os.path.exists(file_name):
+        pd.DataFrame().to_csv(file_name, index=False)
 @st.cache_data(show_spinner=False)
 def read_seed_meta(imdb_id: str):
     """
@@ -743,6 +751,9 @@ def sync_with_firebase(sort_mode="cc"):
 
     # GitHub'a push et
     push_favorites_to_github()
+    # seed_meta.csv ve missing_metadata.csv dosyalarını da push et
+    push_file_to_repo("seed_meta.csv", "serkansu/cineselect-manager-online")
+    push_file_to_repo("missing_metadata.csv", "serkansu/cineselect-manager-online")
 
 # --- Page config and auth gate (must run before any Firestore access) ---
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
@@ -1117,8 +1128,7 @@ def show_favorites(fav_type, label):
             if directors:
                 directors_html = " ".join(
                     f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
-                    # Use append instead of set for multi-select
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); window.location.reload(); }})()">{d}</span>'
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.set(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); }})()">{d}</span>'
                     for d in directors
                 )
                 st.markdown(f'<span>🎬 <b>Directors:</b></span> {directors_html}', unsafe_allow_html=True)
@@ -1131,7 +1141,7 @@ def show_favorites(fav_type, label):
                 if created_by:
                     created_by_html = " ".join(
                         f'<span style="cursor:pointer; color:#e67e22; margin-right:8px;" '
-                        f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_directors\',\'{urllib.parse.quote(c)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); window.location.reload(); }})()">{c}</span>'
+                        f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.set(\'selected_directors\',\'{urllib.parse.quote(c)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); }})()">{c}</span>'
                         for c in created_by
                     )
                     st.markdown(f'<span>👨‍💻 <b>Created by:</b></span> {created_by_html}', unsafe_allow_html=True)
@@ -1139,8 +1149,7 @@ def show_favorites(fav_type, label):
             if cast:
                 cast_html = " ".join(
                     f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
-                    # Use append instead of set for multi-select
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); window.location.reload(); }})()">{c}</span>'
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.set(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); }})()">{c}</span>'
                     for c in cast
                 )
                 st.markdown(f'<span>🎭 <b>Cast:</b></span> {cast_html}', unsafe_allow_html=True)
@@ -1149,7 +1158,7 @@ def show_favorites(fav_type, label):
             if genres:
                 genres_html = " ".join(
                     f'<span style="cursor:pointer; color:#e67e22; margin-right:6px; font-size:13px; white-space:nowrap;" '
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_genres\',\'{urllib.parse.quote(g)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); window.location.reload(); }})()">{g}</span>'
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.set(\'selected_genres\',\'{urllib.parse.quote(g)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); }})()">{g}</span>'
                     for g in genres
                 )
                 st.markdown(f'<span>🎞 <b>Genres:</b></span> {genres_html}', unsafe_allow_html=True)
