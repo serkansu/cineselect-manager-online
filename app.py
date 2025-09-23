@@ -13,6 +13,9 @@ from omdb import get_ratings, fetch_ratings
 from firebase_setup import get_firestore
 import re
 
+# --- Page config and auth gate (must run before any Firestore access) ---
+st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
+
 def validate_imdb_id(imdb_id, title=None, year=None):
     """
     IMDb ID'nin OMDb'de geçerli olup olmadığını kontrol eder.
@@ -543,7 +546,6 @@ def validate_imdb_id(imdb_id, title=None, year=None):
         push_favorites_to_github()
 
     # --- Page config and auth gate (must run before any Firestore access) ---
-    st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
     ensure_authenticated()
     # --- /Page config & auth gate ---
     db = get_firestore()
