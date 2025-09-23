@@ -558,8 +558,13 @@ from firebase_admin import credentials, firestore
 
 def get_firestore():
     if not firebase_admin._apps:
-        cred = credentials.Certificate("firebase-key.json")  # 🔑 kendi JSON anahtar dosyan
-        firebase_admin.initialize_app(cred)
+        key_json = os.getenv("FIREBASE_KEY_JSON")
+        if not key_json:
+            raise ValueError("❌ FIREBASE_KEY_JSON environment variable is missing")
+        cred_dict = json.loads(key_json)
+        cred = credentials.Certificate(cred_dict)
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
     return firestore.client()
 def fix_invalid_imdb_ids(data):
     for section in ["movies", "shows"]:
