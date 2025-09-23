@@ -1,21 +1,19 @@
+import streamlit as st
+st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
+
 import csv
 import json
 import os
 import time
 import base64
 import requests
-import streamlit as st
 import firebase_admin
 from pathlib import Path
 from firebase_admin import credentials, firestore
 from tmdb import search_movie, search_tv, search_by_actor
 from omdb import get_ratings, fetch_ratings
-from firebase_setup import get_firestore
-import re
 
 # --- Page config and auth gate (must run before any Firestore access) ---
-st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
-
 def validate_imdb_id(imdb_id, title=None, year=None):
     """
     IMDb ID'nin OMDb'de geçerli olup olmadığını kontrol eder.
@@ -322,8 +320,6 @@ def validate_imdb_id(imdb_id, title=None, year=None):
                     pass
             else:
                 st.success(f"✅ Push OK: {file_path} → {repo_owner}/{repo_name}")
-    import streamlit as st
-    from firebase_setup import get_firestore
     def fix_invalid_imdb_ids(data):
         for section in ["movies", "shows"]:
             for item in data[section]:
