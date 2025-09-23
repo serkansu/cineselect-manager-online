@@ -1,3 +1,4 @@
+import streamlit as st
 @st.cache_data(show_spinner=False)
 def read_seed_meta(imdb_id: str):
     """
@@ -164,7 +165,6 @@ from omdb import fetch_ratings
 import csv
 from pathlib import Path
 SEED_META_PATH = Path(__file__).parent / "seed_meta.csv"
-import streamlit as st
 import requests
 import firebase_admin
 import base64
@@ -474,7 +474,6 @@ def push_favorites_to_github():
                 pass
         else:
             st.success(f"✅ Push OK: {file_path} → {repo_owner}/{repo_name}")
-import streamlit as st
 from firebase_setup import get_firestore
 def fix_invalid_imdb_ids(data):
     for section in ["movies", "shows"]:
@@ -1064,7 +1063,8 @@ def show_favorites(fav_type, label):
             if directors:
                 directors_html = " ".join(
                     f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.set(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.search=params.toString(); }})()">{d}</span>'
+                    # Use append instead of set for multi-select
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.search=params.toString(); }})()">{d}</span>'
                     for d in directors
                 )
                 st.markdown(f'<span>🎬 <b>Directors:</b></span> {directors_html}', unsafe_allow_html=True)
@@ -1072,7 +1072,8 @@ def show_favorites(fav_type, label):
             if cast:
                 cast_html = " ".join(
                     f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.set(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.search=params.toString(); }})()">{c}</span>'
+                    # Use append instead of set for multi-select
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.search=params.toString(); }})()">{c}</span>'
                     for c in cast
                 )
                 st.markdown(f'<span>🎭 <b>Cast:</b></span> {cast_html}', unsafe_allow_html=True)
