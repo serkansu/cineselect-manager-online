@@ -23,9 +23,10 @@ for param, sskey in [
 # Eksik metadata durumunda missing_metadata.csv dosyasına ekleme fonksiyonu
 import csv
 
-def append_missing_meta(title, year, imdb_id="", note=""):
+def append_missing_meta(title, year, imdb_id="", note="", doc_id="", poster=""):
     """
     Eksik metadata durumunda missing_metadata.csv dosyasına ekler.
+    Artık doc_id ve poster da içerir.
     """
     try:
         file_exists = False
@@ -40,8 +41,10 @@ def append_missing_meta(title, year, imdb_id="", note=""):
         with open("missing_metadata.csv", "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow(["title", "year", "imdb_id", "note"])
-            writer.writerow([title, year, imdb_id, note])
+                writer.writerow(["doc_id", "title", "year", "imdb_id", "note", "poster"])
+            writer.writerow([
+                doc_id or "", title or "", year or "", imdb_id or "", note or "", poster or ""
+            ])
     except Exception as e:
         print(f"append_missing_meta error: {e}")
 
@@ -155,6 +158,7 @@ def backfill_metadata():
         if not imdb_id or imdb_id == "tt0000000":
             status.write(f"⏭ Skipped (no imdb): {title} ({year}) [{idx}/{total}]")
             progress.progress(int(idx/total*100))
+            append_missing_meta(title, year, imdb_id, "no imdb id")
             count += 1
             continue
 
@@ -166,6 +170,9 @@ def backfill_metadata():
             time.sleep(0.5)
 
         if meta and (meta.get("directors") or meta.get("cast") or meta.get("genres")):
+            # Ensure genres is not empty; if so, set to ["Unknown"]
+            if not meta.get("genres"):
+                meta["genres"] = ["Unknown"]
             try:
                 db.collection(collection).document(item["id"]).update({
                     "directors": meta.get("directors", []),
@@ -182,7 +189,7 @@ def backfill_metadata():
             not_updated.append(f"{title} ({year})")
             status.write(f"⚠️ No metadata: {title} ({year}) [{idx}/{total}]")
             # Write to missing_metadata.csv on failure
-            append_missing_meta(title, year)
+            append_missing_meta(title, year, imdb_id, "no meta found")
 
         count += 1
         progress.progress(int(idx/total*100))
@@ -458,6 +465,10 @@ def append_seed_meta(imdb_id, title, year, meta):
     if not imdb_id or imdb_id == "tt0000000":
         return
     try:
+        # Ensure genres is not empty; if so, set to ["Unknown"]
+        genres = meta.get("genres", [])
+        if not genres:
+            genres = ["Unknown"]
         write_header = not SEED_META_PATH.exists() or SEED_META_PATH.stat().st_size == 0
         with SEED_META_PATH.open("a", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
@@ -469,7 +480,7 @@ def append_seed_meta(imdb_id, title, year, meta):
                 str(year or ""),
                 "; ".join(meta.get("directors", [])),
                 "; ".join(meta.get("cast", [])),
-                "; ".join(meta.get("genres", [])),
+                "; ".join(genres),
             ])
     except Exception as e:
         print("append_seed_meta error:", e)
