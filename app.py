@@ -1,4 +1,23 @@
 import streamlit as st
+import urllib.parse
+# --- Query param parsing for single-click filters ---
+# At the top of the script, parse st.query_params and set session_state for filters
+qp = st.query_params
+for param, sskey in [
+    ("filter_director", "filter_director"),
+    ("filter_actor", "filter_actor"),
+    ("filter_genre", "filter_genre"),
+]:
+    val = qp.get(param)
+    # Normalize (Streamlit may give list or str)
+    if isinstance(val, list):
+        val = val[0] if val else None
+    if val:
+        st.session_state[sskey] = val
+    else:
+        # Only clear if not present in query params (don't clear if already set by button)
+        if sskey not in st.session_state:
+            st.session_state[sskey] = None
 
 # Eksik csv dosyalarını garantiye al
 import os
@@ -1032,11 +1051,20 @@ genres = sorted({g for doc in source_docs for g in (doc.to_dict().get("genres") 
 ## --- Unified filter row (stateless, no query_params) ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    selected_directors = st.multiselect("🎬 Filter by Director", directors)
+    selected_directors = st.multiselect(
+        "🎬 Filter by Director", directors,
+        default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
+    )
 with col2:
-    selected_actors = st.multiselect("🎭 Filter by Actor", actors)
+    selected_actors = st.multiselect(
+        "🎭 Filter by Actor", actors,
+        default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
+    )
 with col3:
-    selected_genres = st.multiselect("🎞 Filter by Genre", genres)
+    selected_genres = st.multiselect(
+        "🎞 Filter by Genre", genres,
+        default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
+    )
     
 def get_sort_key(fav):
     try:
@@ -1105,30 +1133,27 @@ def show_favorites(fav_type, label):
         with cols[1]:
             st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
 
-            # --- Directors / Cast / Genres as clickable text buttons ---
-            def clickable_text(label, key, filter_type):
-                # HTML link-style clickable text
-                if st.button(label, key=key, help=f"Filter by {filter_type}", use_container_width=False):
-                    st.session_state[f"filter_{filter_type}"] = label
-                    st.rerun()
+            # --- Directors / Cast / Genres as inline markdown links ---
+            def link_list(items, filter_type, emoji, label):
+                if not items:
+                    return
+                filter_param = f"filter_{filter_type}"
+                links = [
+                    f"<a href='?{filter_param}={urllib.parse.quote(name)}' "
+                    f"style='color:#3498db; text-decoration:underline; margin-right:8px;'>{name}</a>"
+                    for name in items
+                ]
+                st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
             # Directors
             if fav.get("directors"):
-                st.markdown("🎬 **Directors:**", unsafe_allow_html=True)
-                for d in fav["directors"]:
-                    clickable_text(d, f"dir_{fav['id']}_{d}", "director")
-
+                link_list(fav["directors"], "director", "🎬", "Directors")
             # Cast
             if fav.get("cast"):
-                st.markdown("🎭 **Cast:**", unsafe_allow_html=True)
-                for c in fav["cast"]:
-                    clickable_text(c, f"cast_{fav['id']}_{c}", "actor")
-
+                link_list(fav["cast"], "actor", "🎭", "Cast")
             # Genres
             if fav.get("genres"):
-                st.markdown("📚 **Genres:**", unsafe_allow_html=True)
-                for g in fav["genres"]:
-                    clickable_text(g, f"genre_{fav['id']}_{g}", "genre")
+                link_list(fav["genres"], "genre", "📚", "Genres")
 
             # --- Refresh Button for each favorite (IMDb & RT) ---
             if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
@@ -1243,6 +1268,8 @@ def show_favorites(fav_type, label):
                     st.session_state[i_key] = pin_val
                     st.success(f"📌 {fav['title']} en üste taşındı (CS={pin_val}).")
                     st.rerun()
+
+
 
 if media_type == "Movie":
     show_favorites("movie", "Favorite Movies")
