@@ -1,43 +1,45 @@
-    def validate_imdb_id(imdb_id, title=None, year=None):
-        """
-        IMDb ID'nin OMDb'de geçerli olup olmadığını kontrol eder.
-        Öncelikle seed_ratings.csv'yi kontrol eder. Eğer orada geçerli rating varsa imdb_id'yi döndürür.
-        Eğer geçerli değilse, OMDb'den kontrol eder. Eğer OMDb'de geçerli rating varsa imdb_id'yi döndürür.
-        Eğer OMDb'den de alınamazsa, fetch_ratings ile doğru IMDb ID'yi bulmaya çalışır.
-        Doğru ID bulunursa onu döndürür, yoksa None döner.
-        """
-        # 1. Öncelikle seed_ratings.csv'yi kontrol et
-        if imdb_id and imdb_id != "tt0000000":
-            seed_stats = read_seed_rating(imdb_id)
-            if seed_stats and (seed_stats.get("imdb_rating") or seed_stats.get("rt")):
-                return imdb_id
-        # 2. OMDb'de kontrol et
-        if imdb_id and imdb_id != "tt0000000":
-            stats = get_ratings(imdb_id)
-            if stats and (stats.get("imdb_rating") or stats.get("rt")):
-                return imdb_id
-        # 3. OMDb'den rating alınamadıysa veya imdb_id eksikse, fetch_ratings ile deneriz
-        if title:
-            ir, rt, raw = fetch_ratings(title, year)
-            # raw dict ise ve imdbID varsa ve başında "tt" ile başlıyorsa
-            if isinstance(raw, dict):
-                new_id = raw.get("imdbID") or raw.get("imdb_id")
-                if new_id and isinstance(new_id, str) and new_id.startswith("tt") and new_id != "tt0000000":
-                    return new_id
-        return None
-    from tmdb import search_movie, search_tv, search_by_actor
-    from omdb import get_ratings
-    from omdb import fetch_ratings
-    import csv
-    from pathlib import Path
-    import streamlit as st
-    import requests
-    import firebase_admin
-    import base64
-    from firebase_admin import credentials, firestore
-    import json
-    import os
-    import time
+import csv
+import json
+import os
+import time
+import base64
+import requests
+import streamlit as st
+import firebase_admin
+from pathlib import Path
+from firebase_admin import credentials, firestore
+from tmdb import search_movie, search_tv, search_by_actor
+from omdb import get_ratings, fetch_ratings
+from firebase_setup import get_firestore
+import re
+
+def validate_imdb_id(imdb_id, title=None, year=None):
+    """
+    IMDb ID'nin OMDb'de geçerli olup olmadığını kontrol eder.
+    Öncelikle seed_ratings.csv'yi kontrol eder. Eğer orada geçerli rating varsa imdb_id'yi döndürür.
+    Eğer geçerli değilse, OMDb'den kontrol eder. Eğer OMDb'de geçerli rating varsa imdb_id'yi döndürür.
+    Eğer OMDb'den de alınamazsa, fetch_ratings ile doğru IMDb ID'yi bulmaya çalışır.
+    Doğru ID bulunursa onu döndürür, yoksa None döner.
+    """
+    # 1. Öncelikle seed_ratings.csv'yi kontrol et
+    if imdb_id and imdb_id != "tt0000000":
+        seed_stats = read_seed_rating(imdb_id)
+        if seed_stats and (seed_stats.get("imdb_rating") or seed_stats.get("rt")):
+            return imdb_id
+    # 2. OMDb'de kontrol et
+    if imdb_id and imdb_id != "tt0000000":
+        stats = get_ratings(imdb_id)
+        if stats and (stats.get("imdb_rating") or stats.get("rt")):
+            return imdb_id
+    # 3. OMDb'den rating alınamadıysa veya imdb_id eksikse, fetch_ratings ile deneriz
+    if title:
+        ir, rt, raw = fetch_ratings(title, year)
+        # raw dict ise ve imdbID varsa ve başında "tt" ile başlıyorsa
+        if isinstance(raw, dict):
+            new_id = raw.get("imdbID") or raw.get("imdb_id")
+            if new_id and isinstance(new_id, str) and new_id.startswith("tt") and new_id != "tt0000000":
+                return new_id
+    return None
     # ---------- Sorting helpers for Streamio export ----------
     ROMAN_MAP = {
         "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
@@ -675,6 +677,9 @@
     def backfill_metadata():
         """Tüm favoriler için eksik yönetmen/oyuncu/tür bilgilerini OMDb/TMDB'den tamamlar."""
         st.info("🔁 Metadata backfill başlıyor...")
+        # Toplam kayıt sayısını hesapla
+        total = sum(1 for _ in db.collection("favorites").stream())
+        progress = st.progress(0)
         count = 0
         updated = 0
         not_updated = []
@@ -688,6 +693,8 @@
                 year = fav.get("year")
 
                 if not imdb_id or imdb_id == "tt0000000":
+                    count += 1
+                    progress.progress(int(count / total * 100))
                     continue  # IMDb ID yoksa geç
 
                 # CSV'de var mı kontrol et
@@ -711,7 +718,9 @@
                         not_updated.append(f"{title} ({year})")
 
                 count += 1
+                progress.progress(int(count / total * 100))
 
+        progress.progress(100)
         st.warning(f"⚠️ Güncellenemeyenler: {len(not_updated)}")
         if not_updated:
             st.write("⚠️ Güncellenemeyenler listesi:", not_updated)
