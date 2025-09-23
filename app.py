@@ -1029,34 +1029,14 @@ else:
 genres = sorted({g for doc in source_docs for g in (doc.to_dict().get("genres") or [])})
 
 
-# --- Restore from URL params (for clickable director/actor filter) ---
-import urllib.parse
-qparams = st.query_params
-selected_directors = []
-selected_actors = []
-selected_genres = []
-if "selected_directors" in qparams:
-    val = qparams["selected_directors"]
-    if isinstance(val, list):
-        selected_directors = [urllib.parse.unquote(v) for v in val]
-    else:
-        selected_directors = [urllib.parse.unquote(val)]
-if "selected_actors" in qparams:
-    val = qparams["selected_actors"]
-    if isinstance(val, list):
-        selected_actors = [urllib.parse.unquote(v) for v in val]
-    else:
-        selected_actors = [urllib.parse.unquote(val)]
-
-# --- Unified filter row ---
+## --- Unified filter row (stateless, no query_params) ---
 col1, col2, col3 = st.columns(3)
-
 with col1:
-    selected_directors = st.multiselect("🎬 Filter by Director", directors, default=selected_directors or None)
+    selected_directors = st.multiselect("🎬 Filter by Director", directors)
 with col2:
-    selected_actors = st.multiselect("🎭 Filter by Actor", actors, default=selected_actors or None)
+    selected_actors = st.multiselect("🎭 Filter by Actor", actors)
 with col3:
-    selected_genres = st.multiselect("🎞 Filter by Genre", genres, default=selected_genres or None)
+    selected_genres = st.multiselect("🎞 Filter by Genre", genres)
     
 def get_sort_key(fav):
     try:
@@ -1072,25 +1052,29 @@ def get_sort_key(fav):
         return 0
 
 def show_favorites(fav_type, label):
-    # --- Read query params for filters at the beginning ---
-    selected_directors = st.query_params.get("selected_directors", [])
-    selected_cast = st.query_params.get("selected_cast", [])
-    selected_genres = st.query_params.get("selected_genres", [])
+    # --- Filtering logic using session_state (no query_params) ---
     docs = db.collection("favorites").where("type", "==", fav_type).stream()
     favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
     # Apply director filter(s) if selected
     if selected_directors:
         favorites = [f for f in favorites if any(d in (f.get("directors") or []) for d in selected_directors)]
-
     # Apply actor/cast filter(s) if selected
-    # Backward compatibility: use selected_cast if present, else selected_actors
-    cast_filter = selected_cast if selected_cast else selected_actors
-    if cast_filter:
-        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in cast_filter)]
-
+    if selected_actors:
+        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in selected_actors)]
     # Apply genre filter(s) if selected
     if selected_genres:
         favorites = [f for f in favorites if any(g in (f.get("genres", []) or []) for g in selected_genres)]
+
+    # --- Also support single-click filter by director, actor, genre via session_state ---
+    fd = st.session_state.get("filter_director")
+    fa = st.session_state.get("filter_actor")
+    fg = st.session_state.get("filter_genre")
+    if fd:
+        favorites = [f for f in favorites if fd in f.get("directors",[])]
+    if fa:
+        favorites = [f for f in favorites if fa in f.get("cast",[])]
+    if fg:
+        favorites = [f for f in favorites if fg in f.get("genres",[])]
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
@@ -1120,67 +1104,32 @@ def show_favorites(fav_type, label):
                     st.image(poster_url, width=120)
         with cols[1]:
             st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
-            # --- Directors / Created by / Cast / Genres as compact badge-buttons (guaranteed) ---
-            import math
 
-            def _set_query_param_and_rerun(param_name: str, value: str):
-                # set as single-value param (replace current)
-                try:
-                    st.experimental_set_query_params(**{param_name: value})
-                except Exception:
-                    # fallback for older Streamlit versions
-                    q = dict(st.query_params)
-                    q[param_name] = value
-                    try:
-                        st.experimental_set_query_params(**q)
-                    except Exception:
-                        pass
-                st.rerun()
+            # --- Directors / Cast / Genres as clickable text buttons ---
+            def clickable_text(label, key, filter_type):
+                # HTML link-style clickable text
+                if st.button(label, key=key, help=f"Filter by {filter_type}", use_container_width=False):
+                    st.session_state[f"filter_{filter_type}"] = label
+                    st.rerun()
 
-            # Helper to render a horizontal row of small buttons (badges).
-            def render_badge_row(items, param_name, id_prefix, color="#1da1f2"):
-                if not items:
-                    return
-                # Determine number of columns to place badges in a compact inline grid.
-                # Keep max 6 badges per visual row to avoid excessive height.
-                per_row = 6
-                rows = math.ceil(len(items) / per_row)
-                idx = 0
-                for r in range(rows):
-                    cols = st.columns(min(per_row, max(1, len(items) - idx)))
-                    for c in cols:
-                        item = items[idx]
-                        key = f"{id_prefix}_{fav.get('id','')}_{idx}"
-                        if c.button(item, key=key):
-                            _set_query_param_and_rerun(param_name, item)
-                        idx += 1
-                        if idx >= len(items):
-                            break
-
-            # Directors (films) or Created by (shows)
-            directors = fav.get("directors", []) or []
-            if directors:
-                st.markdown("🎬 **Directors:**")
-                render_badge_row(directors, "selected_directors", "dir_btn", color="#1da1f2")
-            elif not directors and fav.get("type") == "show":
-                created_by = fav.get("created_by", []) or []
-                if isinstance(created_by, str):
-                    created_by = [created_by] if created_by else []
-                if created_by:
-                    st.markdown("👨‍💻 **Created by:**")
-                    render_badge_row(created_by, "selected_directors", "creator_btn", color="#e67e22")
+            # Directors
+            if fav.get("directors"):
+                st.write("🎬 **Directors:** ", end="")
+                for d in fav["directors"]:
+                    clickable_text(d, f"dir_{fav['id']}_{d}", "director")
 
             # Cast
-            cast = fav.get("cast", []) or []
-            if cast:
-                st.markdown("🎭 **Cast:**")
-                render_badge_row(cast, "selected_actors", "cast_btn", color="#1da1f2")
+            if fav.get("cast"):
+                st.write("🎭 **Cast:** ", end="")
+                for c in fav["cast"]:
+                    clickable_text(c, f"cast_{fav['id']}_{c}", "actor")
 
             # Genres
-            genres = fav.get("genres", []) or []
-            if genres:
-                st.markdown("🎞 **Genres:**")
-                render_badge_row(genres, "selected_genres", "genre_btn", color="#e67e22")
+            if fav.get("genres"):
+                st.write("📚 **Genres:** ", end="")
+                for g in fav["genres"]:
+                    clickable_text(g, f"genre_{fav['id']}_{g}", "genre")
+
             # --- Refresh Button for each favorite (IMDb & RT) ---
             if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
                 imdb_id = (fav.get("imdb") or "").strip()
