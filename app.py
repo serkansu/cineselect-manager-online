@@ -1,21 +1,3 @@
-# --- Tek seferde Firestore'dan tüm favoriler çek ---
-all_docs = [doc.to_dict() for doc in db.collection("favorites").stream()]
-
-# --- Director filtresi ---
-all_directors = sorted({d for doc in all_docs for d in (doc.get("directors") or [])})
-filter_directors = st.multiselect("🎬 Filter by Director", all_directors)
-
-# --- Actor filtresi ---
-if filter_directors:
-    relevant_docs = [doc for doc in all_docs if any(d in (doc.get("directors") or []) for d in filter_directors)]
-else:
-    relevant_docs = all_docs
-all_actors = sorted({a for doc in relevant_docs for a in (doc.get("cast") or [])})
-filter_actors = st.multiselect("🎭 Filter by Actor", all_actors)
-
-# --- Genre filtresi ---
-all_genres = sorted({g for doc in relevant_docs for g in (doc.get("genres") or [])})
-filter_genres = st.multiselect("🎞️ Filter by Genre", all_genres)
 def read_seed_meta(imdb_id: str):
     """
     seed_meta.csv içinden imdb_id ile eşleşen satırın metadata'sını döndürür.
@@ -716,7 +698,32 @@ def sync_with_firebase(sort_mode="cc"):
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
 ensure_authenticated()
 # --- /Page config & auth gate ---
-db = get_firestore()
+import sys
+# --- Firestore bağlantısı kuruluyor ---
+try:
+    db = get_firestore()
+except Exception as e:
+    st.error(f"❌ Firebase bağlantısı kurulamadı: {e}")
+    st.stop()
+
+# --- Tek seferde Firestore'dan tüm favoriler çek ---
+all_docs = [doc.to_dict() for doc in db.collection("favorites").stream()]
+
+# --- Director filtresi ---
+all_directors = sorted({d for doc in all_docs for d in (doc.get("directors") or [])})
+filter_directors = st.multiselect("🎬 Filter by Director", all_directors)
+
+# --- Actor filtresi ---
+if filter_directors:
+    relevant_docs = [doc for doc in all_docs if any(d in (doc.get("directors") or []) for d in filter_directors)]
+else:
+    relevant_docs = all_docs
+all_actors = sorted({a for doc in relevant_docs for a in (doc.get("cast") or [])})
+filter_actors = st.multiselect("🎭 Filter by Actor", all_actors)
+
+# --- Genre filtresi ---
+all_genres = sorted({g for doc in relevant_docs for g in (doc.get("genres") or [])})
+filter_genres = st.multiselect("🎞️ Filter by Genre", all_genres)
 # Firestore'dan verileri çek ve session'a yaz
 movie_docs = db.collection("favorites").where("type", "==", "movie").stream()
 series_docs = db.collection("favorites").where("type", "==", "show").stream()
