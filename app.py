@@ -138,6 +138,46 @@ def backfill_metadata():
     if not_updated:
         st.warning(f"⚠️ Güncellenemeyenler: {len(not_updated)}")
         st.write(not_updated)
+        # --- Export not_updated list to CSV ---
+        import csv
+        rows = []
+        for entry in not_updated:
+            # Try to split "Title (Year)" pattern
+            title = entry
+            year = ""
+            imdb_id = ""
+            note = ""
+            try:
+                # Try to extract title and year
+                import re
+                m = re.match(r"^(.*)\s+\((\d{4})\)$", entry.strip())
+                if m:
+                    title = m.group(1).strip()
+                    year = m.group(2).strip()
+                else:
+                    title = entry.strip()
+                    year = ""
+            except Exception:
+                title = entry
+                year = ""
+            # Try to get imdb_id from Firestore
+            # Search all_docs for matching title and year
+            imdb_id = ""
+            for _type, _coll, _doc in all_docs:
+                d = _doc.to_dict()
+                t = (d.get("title") or "").strip()
+                y = str(d.get("year") or "").strip()
+                if title == t and (not year or year == y):
+                    imdb_id = (d.get("imdb") or d.get("imdb_id") or "").strip()
+                    break
+            rows.append([title, year, imdb_id, note])
+        # Write to CSV
+        with open("missing_metadata.csv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["title", "year", "imdb_id", "note"])
+            for row in rows:
+                writer.writerow(row)
+        st.success("missing_metadata.csv dosyası oluşturuldu.")
 def validate_imdb_id(imdb_id, title=None, year=None):
     """
     IMDb ID'nin OMDb'de geçerli olup olmadığını kontrol eder.
@@ -425,6 +465,8 @@ def push_favorites_to_github():
     publish_plan = [
         {"file": "favorites.json", "owner": "serkansu", "repo": "cineselect-addon"},
         {"file": "seed_ratings.csv", "owner": "serkansu", "repo": "cineselect-manager-online"},
+        {"file": "seed_meta.csv", "owner": "serkansu", "repo": "cineselect-manager-online"},
+        {"file": "missing_metadata.csv", "owner": "serkansu", "repo": "cineselect-manager-online"},
     ]
 
     headers = {
@@ -1020,19 +1062,25 @@ def get_sort_key(fav):
         return 0
 
 def show_favorites(fav_type, label):
+    # --- Read query params for filters at the beginning ---
+    selected_directors = st.query_params.get("selected_directors", [])
+    selected_cast = st.query_params.get("selected_cast", [])
+    selected_genres = st.query_params.get("selected_genres", [])
     docs = db.collection("favorites").where("type", "==", fav_type).stream()
     favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
     # Apply director filter(s) if selected
     if selected_directors:
         favorites = [f for f in favorites if any(d in (f.get("directors") or []) for d in selected_directors)]
 
-    # Apply actor filter(s) if selected
-    if selected_actors:
-        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in selected_actors)]
+    # Apply actor/cast filter(s) if selected
+    # Backward compatibility: use selected_cast if present, else selected_actors
+    cast_filter = selected_cast if selected_cast else selected_actors
+    if cast_filter:
+        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in cast_filter)]
 
     # Apply genre filter(s) if selected
     if selected_genres:
-        favorites = [f for f in favorites if any(g in (f.get("genres") or []) for g in selected_genres)]
+        favorites = [f for f in favorites if any(g in (f.get("genres", []) or []) for g in selected_genres)]
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
@@ -1062,7 +1110,7 @@ def show_favorites(fav_type, label):
                     st.image(poster_url, width=120)
         with cols[1]:
             st.markdown(f"**{idx+1}. {fav['title']} ({fav['year']})** | ⭐ IMDb: {imdb_display} | 🍅 RT: {rt_display} | 🎯 CS: {fav.get('cineselectRating', 'N/A')}")
-            # --- Directors and Cast block ---
+            # --- Directors, Created by, and Cast block ---
             directors = fav.get("directors", [])
             cast = fav.get("cast", [])
             # --- Inline clickable spans for directors ---
@@ -1070,19 +1118,41 @@ def show_favorites(fav_type, label):
                 directors_html = " ".join(
                     f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
                     # Use append instead of set for multi-select
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); }})()">{d}</span>'
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); window.location.reload(); }})()">{d}</span>'
                     for d in directors
                 )
                 st.markdown(f'<span>🎬 <b>Directors:</b></span> {directors_html}', unsafe_allow_html=True)
+            # If directors is empty and TV Show, check for created_by
+            elif not directors and fav.get("type") == "show":
+                created_by = fav.get("created_by", [])
+                # Support both string and list
+                if isinstance(created_by, str):
+                    created_by = [created_by] if created_by else []
+                if created_by:
+                    created_by_html = " ".join(
+                        f'<span style="cursor:pointer; color:#e67e22; margin-right:8px;" '
+                        f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_directors\',\'{urllib.parse.quote(c)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); window.location.reload(); }})()">{c}</span>'
+                        for c in created_by
+                    )
+                    st.markdown(f'<span>👨‍💻 <b>Created by:</b></span> {created_by_html}', unsafe_allow_html=True)
             # --- Inline clickable spans for cast ---
             if cast:
                 cast_html = " ".join(
                     f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
                     # Use append instead of set for multi-select
-                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); }})()">{c}</span>'
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); window.location.reload(); }})()">{c}</span>'
                     for c in cast
                 )
                 st.markdown(f'<span>🎭 <b>Cast:</b></span> {cast_html}', unsafe_allow_html=True)
+            # --- Inline clickable spans for genres ---
+            genres = fav.get("genres", [])
+            if genres:
+                genres_html = " ".join(
+                    f'<span style="cursor:pointer; color:#e67e22; margin-right:6px; font-size:13px; white-space:nowrap;" '
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.append(\'selected_genres\',\'{urllib.parse.quote(g)}\'); window.location.href=window.location.pathname+\'?\'+params.toString(); window.location.reload(); }})()">{g}</span>'
+                    for g in genres
+                )
+                st.markdown(f'<span>🎞 <b>Genres:</b></span> {genres_html}', unsafe_allow_html=True)
             # --- Refresh Button for each favorite (IMDb & RT) ---
             if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
                 imdb_id = (fav.get("imdb") or "").strip()
