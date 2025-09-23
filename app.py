@@ -1,3 +1,4 @@
+@st.cache_data(show_spinner=False)
 def read_seed_meta(imdb_id: str):
     """
     seed_meta.csv içinden imdb_id ile eşleşen satırın metadata'sını döndürür.
@@ -20,6 +21,7 @@ def read_seed_meta(imdb_id: str):
         print("read_seed_meta error:", e)
     return None
 
+@st.cache_data(show_spinner=False)
 def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
     """OMDb öncelikli, gerekirse TMDB fallback ile metadata getirir."""
     # 1) OMDb
@@ -307,6 +309,7 @@ def append_seed_rating(imdb_id, title, year, imdb_rating, rt_score):
 # --- /seed ekleme fonksiyonu ---
 
 # --- seed okuma fonksiyonu ---
+@st.cache_data(show_spinner=False)
 def read_seed_rating(imdb_id: str):
     """seed_ratings.csv içinden imdb_id ile eşleşen satırı döndürür.
     {'imdb_rating': float|None, 'rt': int|None} şeklinde veri verir; bulunamazsa None döner.
@@ -968,20 +971,35 @@ else:
     source_docs = []
 genres = sorted({g for doc in source_docs for g in (doc.to_dict().get("genres") or [])})
 
-# Initialize filter selections
+
+# --- Restore from URL params (for clickable director/actor filter) ---
+import urllib.parse
+qparams = st.query_params
 selected_directors = []
 selected_actors = []
 selected_genres = []
+if "selected_directors" in qparams:
+    val = qparams["selected_directors"]
+    if isinstance(val, list):
+        selected_directors = [urllib.parse.unquote(v) for v in val]
+    else:
+        selected_directors = [urllib.parse.unquote(val)]
+if "selected_actors" in qparams:
+    val = qparams["selected_actors"]
+    if isinstance(val, list):
+        selected_actors = [urllib.parse.unquote(v) for v in val]
+    else:
+        selected_actors = [urllib.parse.unquote(val)]
 
 # --- Unified filter row ---
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    selected_directors = st.multiselect("🎬 Filter by Director", directors, default=None)
+    selected_directors = st.multiselect("🎬 Filter by Director", directors, default=selected_directors or None)
 with col2:
-    selected_actors = st.multiselect("🎭 Filter by Actor", actors, default=None)
+    selected_actors = st.multiselect("🎭 Filter by Actor", actors, default=selected_actors or None)
 with col3:
-    selected_genres = st.multiselect("🎞 Filter by Genre", genres, default=None)
+    selected_genres = st.multiselect("🎞 Filter by Genre", genres, default=selected_genres or None)
     
 def get_sort_key(fav):
     try:
@@ -1042,24 +1060,22 @@ def show_favorites(fav_type, label):
             # --- Directors and Cast block ---
             directors = fav.get("directors", [])
             cast = fav.get("cast", [])
-            # --- Refactored clickable buttons for directors ---
+            # --- Inline clickable spans for directors ---
             if directors:
-                st.write("🎬 **Directors:**")
-                dir_cols = st.columns(len(directors))
-                for i, d in enumerate(directors):
-                    with dir_cols[i]:
-                        if st.button(d, key=f"dir_{fav['id']}_{i}"):
-                            st.session_state["selected_directors"] = [d]
-                            st.rerun()
-            # --- Refactored clickable buttons for cast ---
+                directors_html = " ".join(
+                    f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.set(\'selected_directors\',\'{urllib.parse.quote(d)}\'); window.location.search=params.toString(); }})()">{d}</span>'
+                    for d in directors
+                )
+                st.markdown(f'<span>🎬 <b>Directors:</b></span> {directors_html}', unsafe_allow_html=True)
+            # --- Inline clickable spans for cast ---
             if cast:
-                st.write("🎭 **Cast:**")
-                cast_cols = st.columns(min(len(cast), 4))
-                for i, c in enumerate(cast):
-                    with cast_cols[i % 4]:
-                        if st.button(c, key=f"cast_{fav['id']}_{i}"):
-                            st.session_state["selected_actors"] = [c]
-                            st.rerun()
+                cast_html = " ".join(
+                    f'<span style="cursor:pointer; color:#1da1f2; margin-right:8px;" '
+                    f'onclick="(function(){{ var params=new URLSearchParams(window.location.search); params.set(\'selected_actors\',\'{urllib.parse.quote(c)}\'); window.location.search=params.toString(); }})()">{c}</span>'
+                    for c in cast
+                )
+                st.markdown(f'<span>🎭 <b>Cast:</b></span> {cast_html}', unsafe_allow_html=True)
             # --- Refresh Button for each favorite (IMDb & RT) ---
             if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
                 imdb_id = (fav.get("imdb") or "").strip()
