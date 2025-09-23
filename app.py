@@ -8,53 +8,113 @@ def read_seed_meta(imdb_id: str):
     return None
 
 def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
-    """
-    Dış kaynaktan metadata (yönetmen, oyuncu, tür) getirir.
-    {'directors': [...], 'cast': [...], 'genres': [...]} veya None.
-    (Gerçek implementasyon burada yok, örnek için pass.)
-    """
-    # Burada gerçek implementasyon olmalı; örnek olarak None döndür.
+    """OMDb öncelikli, gerekirse TMDB fallback ile metadata getirir."""
+    # 1) OMDb
+    try:
+        omdb_key = os.getenv("OMDB_API_KEY")
+        if omdb_key and imdb_id:
+            url = f"http://www.omdbapi.com/?i={imdb_id}&apikey={omdb_key}&plot=short&r=json"
+            r = requests.get(url, timeout=12)
+            if r.status_code == 200:
+                d = r.json()
+                if d.get("Response") == "True":
+                    directors = [x.strip() for x in (d.get("Director") or "").split(",") if x.strip() and x.strip() != "N/A"]
+                    cast = [x.strip() for x in (d.get("Actors") or "").split(",") if x.strip() and x.strip() != "N/A"]
+                    genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
+                    if directors or cast or genres:
+                        return {"directors": directors, "cast": cast, "genres": genres}
+    except Exception as e:
+        print("fetch_metadata OMDb error:", e)
+
+    # 2) TMDB fallback
+    try:
+        tmdb_key = os.getenv("TMDB_API_KEY")
+        if tmdb_key and imdb_id:
+            find_url = f"https://api.themoviedb.org/3/find/{imdb_id}"
+            params = {"api_key": tmdb_key, "external_source": "imdb_id"}
+            r = requests.get(find_url, params=params, timeout=12)
+            if r.status_code == 200:
+                j = r.json()
+                results = j.get("movie_results") or j.get("tv_results") or []
+                if results:
+                    tmdb_id = results[0].get("id")
+                    search_type = "movie" if j.get("movie_results") else "tv"
+                    credits_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits"
+                    cred = requests.get(credits_url, params={"api_key": tmdb_key}, timeout=12)
+                    if cred.status_code == 200:
+                        cj = cred.json()
+                        directors = [c.get("name") for c in cj.get("crew", []) if c.get("job") == "Director"]
+                        cast = [c.get("name") for c in (cj.get("cast") or [])][:8]
+                        genres = []
+                        if isinstance(results[0].get("genres"), list):
+                            genres = [g.get("name") for g in results[0].get("genres", []) if g.get("name")]
+                        if directors or cast or genres:
+                            return {"directors": directors, "cast": cast, "genres": genres}
+    except Exception as e:
+        print("fetch_metadata TMDB error:", e)
+
     return None
 
-# --- Metadata Backfill fonksiyonu ---
 def backfill_metadata():
+    db = get_firestore()
+    # toplamı göstermek için önce topla
+    all_docs = []
+    for type_name, collection in [("movie", "favorites"), ("show", "favorites")]:
+        for d in db.collection(collection).where("type", "==", type_name).stream():
+            all_docs.append((type_name, collection, d))
+
+    total = len(all_docs) or 1
+    progress = st.progress(0)
+    status = st.empty()
+
     count = 0
     updated = 0
     not_updated = []
-    db = get_firestore()
-    all_types = [("movie", "favorites"), ("show", "favorites")]
-    for type_name, collection in all_types:
-        docs = db.collection(collection).where("type", "==", type_name).stream()
-        for doc in docs:
-            item = doc.to_dict()
-            imdb_id = (item.get("imdb") or "").strip()
-            title = item.get("title")
-            year = item.get("year")
-            if not imdb_id or imdb_id == "tt0000000":
-                continue
-            # Metadata oku: önce seed, yoksa fetch
-            meta = read_seed_meta(imdb_id)
-            meta_source = "seed"
-            if not meta:
-                meta = fetch_metadata(imdb_id, title, year, is_series=(type_name=="show"))
-                meta_source = "fetch"
-                time.sleep(0.5)
-            # Metadata varsa ve en az bir alan doluysa güncelle
-            if meta and (meta.get("directors") or meta.get("cast") or meta.get("genres")):
+
+    for idx, (type_name, collection, doc) in enumerate(all_docs, start=1):
+        item = doc.to_dict()
+        imdb_id = (item.get("imdb") or "").strip()
+        title = item.get("title")
+        year = item.get("year")
+
+        if not imdb_id or imdb_id == "tt0000000":
+            status.write(f"⏭ Skipped (no imdb): {title} ({year}) [{idx}/{total}]")
+            progress.progress(int(idx/total*100))
+            count += 1
+            continue
+
+        meta = read_seed_meta(imdb_id)
+        meta_source = "seed"
+        if not meta:
+            meta = fetch_metadata(imdb_id, title, year, is_series=(type_name == "show"))
+            meta_source = "fetch"
+            time.sleep(0.5)
+
+        if meta and (meta.get("directors") or meta.get("cast") or meta.get("genres")):
+            try:
                 db.collection(collection).document(item["id"]).update({
                     "directors": meta.get("directors", []),
                     "cast": meta.get("cast", []),
                     "genres": meta.get("genres", []),
                 })
+                append_seed_meta(imdb_id, title, year, meta)   # ✅ CSV’ye de yaz
                 updated += 1
-                st.write(f"✅ {title} ({year}) güncellendi. [{meta_source}]")
-            else:
+                status.write(f"✅ Updated: {title} ({year}) [{idx}/{total}] via {meta_source}")
+            except Exception as e:
                 not_updated.append(f"{title} ({year})")
-            count += 1
-    st.success(f"Taramada toplam: {count}, güncellenen: {updated}, güncellenemeyen: {len(not_updated)}")
+                status.write(f"⚠️ Failed to update Firestore for {title} ({year}): {e}")
+        else:
+            not_updated.append(f"{title} ({year})")
+            status.write(f"⚠️ No metadata: {title} ({year}) [{idx}/{total}]")
+
+        count += 1
+        progress.progress(int(idx/total*100))
+
+    progress.progress(100)
+    progress.empty()
+    st.success(f"Done. Scanned: {count}, updated: {updated}, not updated: {len(not_updated)}")
     if not_updated:
-        st.warning(f"Güncellenemeyen sayısı: {len(not_updated)}")
-        st.write("⚠️ Güncellenemeyenler:")
+        st.warning(f"⚠️ Güncellenemeyenler: {len(not_updated)}")
         st.write(not_updated)
 def validate_imdb_id(imdb_id, title=None, year=None):
     """
@@ -88,6 +148,7 @@ from omdb import get_ratings
 from omdb import fetch_ratings
 import csv
 from pathlib import Path
+SEED_META_PATH = Path(__file__).parent / "seed_meta.csv"
 import streamlit as st
 import requests
 import firebase_admin
@@ -273,6 +334,28 @@ def read_seed_rating(imdb_id: str):
     except Exception:
         pass
     return None
+# --- /seed okuma fonksiyonu ---
+
+def append_seed_meta(imdb_id, title, year, meta):
+    """seed_meta.csv'ye metadata ekler (yönetmen, oyuncu, tür)."""
+    if not imdb_id or imdb_id == "tt0000000":
+        return
+    try:
+        write_header = not SEED_META_PATH.exists() or SEED_META_PATH.stat().st_size == 0
+        with SEED_META_PATH.open("a", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            if write_header:
+                w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
+            w.writerow([
+                imdb_id,
+                title or "",
+                str(year or ""),
+                "; ".join(meta.get("directors", [])),
+                "; ".join(meta.get("cast", [])),
+                "; ".join(meta.get("genres", [])),
+            ])
+    except Exception as e:
+        print("append_seed_meta error:", e)
 # --- /seed okuma fonksiyonu ---
 def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     tmdb_api_key = os.getenv("TMDB_API_KEY")
