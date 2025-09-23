@@ -798,8 +798,9 @@ def sync_with_firebase(sort_mode="cc"):
         st.write("🔍 FAVORITES DEBUG (output):", output_data)
     st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
 
-    # GitHub'a push et
+    # GitHub'a push et (tüm CSV dosyaları dahil)
     push_favorites_to_github()
+    st.success("✅ favorites.json, seed_ratings.csv, seed_meta.csv ve missing_metadata.csv GitHub'a push edildi.")
 
 # --- Page config and auth gate (must run before any Firestore access) ---
 st.set_page_config(page_title="Serkan's Watchagain Movies & Series ONLINE", layout="wide")
