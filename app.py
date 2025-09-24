@@ -119,7 +119,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
                         # Genres
                         genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
                         # Directors
-                        directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director"]
+                        directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
                         # TV shows → created_by fallback
@@ -152,7 +152,9 @@ def backfill_metadata(limit=20):
     updated = 0
     not_updated = []
 
-    for idx, (type_name, collection, doc) in enumerate(all_docs[:limit], start=1):
+    docs_to_process = all_docs if limit is None else all_docs[:limit]
+
+    for idx, (type_name, collection, doc) in enumerate(docs_to_process, start=1):
         item = doc.to_dict()
         imdb_id = (item.get("imdb") or "").strip()
         title = item.get("title")
@@ -167,12 +169,16 @@ def backfill_metadata(limit=20):
 
         meta = read_seed_meta(imdb_id)
         meta_source = "seed"
-        # If meta exists but genres are missing, try to fetch again from OMDb/TMDB
-        if meta and not meta.get("genres"):
-            # Genre boş → OMDb/TMDB’den tekrar dene
+        # If meta exists but directors, cast, or genres are missing, try to fetch again from OMDb/TMDB
+        if meta and (not meta.get("directors") or not meta.get("cast") or not meta.get("genres")):
             new_meta = fetch_metadata(imdb_id, title, year, is_series=(type_name == "show"))
-            if new_meta and new_meta.get("genres"):
-                meta["genres"] = new_meta["genres"]
+            if new_meta:
+                if not meta.get("directors"):
+                    meta["directors"] = new_meta.get("directors", [])
+                if not meta.get("cast"):
+                    meta["cast"] = new_meta.get("cast", [])
+                if not meta.get("genres"):
+                    meta["genres"] = new_meta.get("genres", [])
                 meta_source = "fetch"
         if not meta:
             meta = fetch_metadata(imdb_id, title, year, is_series=(type_name == "show"))
@@ -904,8 +910,13 @@ if st.button("📊 Favori Sayılarını Göster"):
 
 # --- Metadata Backfill Button ---
 limit_val = st.number_input("Kaç kayıt işlenecek?", min_value=10, max_value=500, value=20, step=10)
+full_backfill = st.checkbox("Full backfill (tüm kayıtlar)")
+
 if st.button("🔁 Metadata Backfill"):
-    backfill_metadata(limit=limit_val)
+    if full_backfill:
+        backfill_metadata(limit=None)
+    else:
+        backfill_metadata(limit=limit_val)
 
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
