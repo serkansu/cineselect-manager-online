@@ -121,20 +121,20 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # --- TV shows: use created_by if directors is empty or ["Unknown"]
+                        # --- TV shows: use created_by if directors is empty or ["Unknown"], always propagate created_by for TV
                         created_by = []
                         if search_type == "tv":
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
                             if not directors or directors == ["Unknown"]:
-                                # For TV, if directors missing, leave directors empty and use created_by field
+                                # For TV, if directors missing, leave directors empty
                                 directors = []
-                        if not directors:
-                            directors = ["Unknown"] if search_type == "movie" else []
-                        if not genres:
-                            genres = ["Unknown"]
-                        tmdb_result = {"directors": directors, "cast": cast, "genres": genres}
-                        if search_type == "tv":
-                            tmdb_result["created_by"] = created_by
+                            tmdb_result = {"directors": directors, "cast": cast, "genres": genres, "created_by": created_by}
+                        else:
+                            if not directors:
+                                directors = ["Unknown"]
+                            if not genres:
+                                genres = ["Unknown"]
+                            tmdb_result = {"directors": directors, "cast": cast, "genres": genres}
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
