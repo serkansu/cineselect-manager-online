@@ -71,8 +71,15 @@ def read_seed_meta(imdb_id: str):
     return None
 
 @st.cache_data(show_spinner=False)
-def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
-    """OMDb öncelikli, gerekirse TMDB fallback ile metadata getirir."""
+def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=None):
+    """
+    OMDb öncelikli, gerekirse TMDB fallback ile metadata getirir.
+    Yalnızca Firestore'daki mevcut (manuel) değerleri BOŞ olan alanları doldurur.
+    `existing`: mevcut Firestore değerleri (dict), varsa.
+    """
+    # Fetch metadata as usual
+    omdb_result = None
+    tmdb_result = None
     # 1) OMDb
     try:
         omdb_key = os.getenv("OMDB_API_KEY")
@@ -86,7 +93,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
                     cast = [x.strip() for x in (d.get("Actors") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     if directors or cast or genres:
-                        return {"directors": directors, "cast": cast, "genres": genres}
+                        omdb_result = {"directors": directors, "cast": cast, "genres": genres}
     except Exception as e:
         print("fetch_metadata OMDb error:", e)
 
@@ -121,12 +128,33 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
                             directors = ["Unknown"]
                         if not genres:
                             genres = ["Unknown"]
-                        return {"directors": directors, "cast": cast, "genres": genres}
+                        tmdb_result = {"directors": directors, "cast": cast, "genres": genres}
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
-    # If both OMDb and TMDB fail, return genres = ["Unknown"] and directors = ["Unknown"]
-    return {"directors": ["Unknown"], "cast": [], "genres": ["Unknown"]}
+    # Merge fetched data, OMDb preferred
+    meta = omdb_result or tmdb_result or {"directors": ["Unknown"], "cast": [], "genres": ["Unknown"]}
+
+    # --- Only fill empty fields; keep existing manual values if present ---
+    if existing is not None:
+        # Defensive: support both None and empty list as "empty"
+        result = {}
+        for field in ("directors", "cast", "genres"):
+            existing_val = existing.get(field)
+            # Treat empty list, None, or ["Unknown"] as empty for directors/genres
+            if field in ("directors", "genres"):
+                if not existing_val or (isinstance(existing_val, list) and (len(existing_val) == 0 or existing_val == ["Unknown"])):
+                    result[field] = meta.get(field, [])
+                else:
+                    result[field] = existing_val
+            elif field == "cast":
+                if not existing_val or (isinstance(existing_val, list) and len(existing_val) == 0):
+                    result[field] = meta.get(field, [])
+                else:
+                    result[field] = existing_val
+        return result
+    else:
+        return meta
 
 def backfill_metadata(limit=20):
     db = get_firestore()
@@ -898,9 +926,6 @@ with col2:
     if "show_posters" not in st.session_state:
         st.session_state["show_posters"] = True
 
-    if st.button("🖼️ Toggle Posters"):
-        st.session_state["show_posters"] = not st.session_state["show_posters"]
-
     # Varsayılan sıralama modu (cc = CineSelect)
     if "sync_sort_mode" not in st.session_state:
         st.session_state["sync_sort_mode"] = "year"
@@ -929,15 +954,6 @@ def show_favorites_count():
 if st.button("📊 Favori Sayılarını Göster"):
     show_favorites_count()
 
-# --- Metadata Backfill Button ---
-limit_val = st.number_input("Kaç kayıt işlenecek?", min_value=10, max_value=500, value=20, step=10)
-full_backfill = st.checkbox("Full backfill (tüm kayıtlar)")
-
-if st.button("🔁 Metadata Backfill"):
-    if full_backfill:
-        backfill_metadata(limit=None)
-    else:
-        backfill_metadata(limit=limit_val)
 
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
@@ -1027,7 +1043,7 @@ if query:
                         title=item["title"],
                         year=item.get("year"),
                         is_series=(media_key == "show"),
-                )
+                    )
 
                 # IMDb ID doğrulama/düzeltme
                 imdb_id = validate_imdb_id(imdb_id, item["title"], item.get("year")) or imdb_id
@@ -1060,6 +1076,9 @@ if query:
                 imdb_rating = float(stats.get("imdb_rating") or 0.0)
                 rt_score    = int(stats.get("rt") or 0)
 
+                # --- Fetch full metadata (directors, cast, genres) ---
+                new_meta = fetch_metadata(imdb_id, item["title"], item.get("year"), is_series=(media_key == "show"))
+
                 # 🔎 DEBUG: Kaynak ve ham yanıtlar
                 st.write(f"🔍 Source: {source or '—'} | 🆔 IMDb ID: {imdb_id or '—'} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
 
@@ -1087,6 +1106,7 @@ if query:
                     import json as _json
                     st.caption("OMDb by title (raw JSON)")
                     st.code(_json.dumps(raw_title, ensure_ascii=False, indent=2))
+
                 # 3) Firestore'a yaz
                 db.collection("favorites").document(item["id"]).set({
                     "id": item["id"],
@@ -1098,6 +1118,9 @@ if query:
                     "rt": rt_score,                            # ✅ CSV/OMDb’den gelen kesin değer
                     "cineselectRating": manual_val,
                     "type": media_key,
+                    "directors": new_meta.get("directors", []) if new_meta else [],
+                    "cast": new_meta.get("cast", []) if new_meta else [],
+                    "genres": new_meta.get("genres", []) if new_meta else [],
                 })
                 # 4) seed_ratings.csv'ye (yoksa) ekle
                 append_seed_rating(
@@ -1106,6 +1129,13 @@ if query:
                     year=item.get("year"),
                     imdb_rating=imdb_rating,
                     rt_score=rt_score,
+                )
+                # 5) seed_meta.csv'ye de ekle (yoksa)
+                append_seed_meta(
+                    imdb_id,
+                    item["title"],
+                    item.get("year"),
+                    new_meta if new_meta else {"directors": [], "cast": [], "genres": []}
                 )
                 st.success(f"✅ {item['title']} added to favorites!")
                 # clear search on next run to avoid "modified after instantiation" error
