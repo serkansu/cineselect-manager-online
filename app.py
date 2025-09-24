@@ -484,10 +484,27 @@ def append_seed_meta(imdb_id, title, year, meta):
     if not imdb_id or imdb_id == "tt0000000":
         return
     try:
+        # --- Migration: ensure header includes genres ---
+        if SEED_META_PATH.exists() and SEED_META_PATH.stat().st_size > 0:
+            with SEED_META_PATH.open("r+", newline="", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if rows and "genres" not in rows[0]:
+                    # eski dosya, başlıkları güncelle
+                    headers = rows[0] + ["genres"]
+                    new_rows = [headers] + [r + ["Unknown"] for r in rows[1:]]
+                    f.seek(0)
+                    writer = csv.writer(f)
+                    writer.writerows(new_rows)
+                    f.truncate()
         # Ensure genres is not empty; if so, set to ["Unknown"]
         genres = meta.get("genres", [])
         if not genres:
             genres = ["Unknown"]
+        # Directors: if empty and created_by exists, use created_by as directors (for TV shows)
+        directors = meta.get("directors", [])
+        if not directors and meta.get("created_by"):
+            directors = meta.get("created_by", [])
         write_header = not SEED_META_PATH.exists() or SEED_META_PATH.stat().st_size == 0
         with SEED_META_PATH.open("a", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
@@ -497,7 +514,7 @@ def append_seed_meta(imdb_id, title, year, meta):
                 imdb_id,
                 title or "",
                 str(year or ""),
-                "; ".join(meta.get("directors", [])),
+                "; ".join(directors),
                 "; ".join(meta.get("cast", [])),
                 "; ".join(genres),
             ])
