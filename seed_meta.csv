@@ -11,6 +11,7 @@ tt0089822,Police Academy 2: Their First Assignment,1985,Jerry Paris,Steve Gutten
 tt21867434,BlackBerry,2023,Matt Johnson,Jay Baruchel; Glenn Howerton; Matt Johnson; Michael Ironside; Cary Elwes; Saul Rubinek; Martin Donovan; Rich Sommer,Comedy; Drama; History
 tt0435761,Toy Story 3,2010,Lee Unkrich,Tom Hanks; Tim Allen; Joan Cusack; Don Rickles; Wallace Shawn; John Ratzenberger; Estelle Harris; Blake Clark,Animation; Family; Comedy
 tt22022452,Inside Out 2,2024,Kelsey Mann,Amy Poehler; Maya Hawke; Kensington Tallman; Liza Lapira; Tony Hale; Lewis Black; Phyllis Smith; Ayo Edebiri,Animation; Adventure; Comedy; Family
+tt22375054,Strange Darling,2024,JT Mollner,Willa Fitzgerald; Kyle Gallner; Madisen Beaty,Horror; Thriller
 tt0075314,Taxi Driver,1976,Martin Scorsese,Robert De Niro; Jodie Foster; Cybill Shepherd; Harvey Keitel; Peter Boyle; Leonard Harris; Albert Brooks; Diahnne Abbott,Crime; Drama
 tt0104291,Forever Young,1992,Steve Miner,Mel Gibson; Jamie Lee Curtis; Elijah Wood; Isabel Glasser; George Wendt; Joe Morton; Nicolas Surovy; David Marshall Grant,Adventure; Fantasy; Drama; Science Fiction; Romance
 tt0157583,Enigma,2001,Michael Apted,Dougray Scott; Kate Winslet; Saffron Burrows; Jeremy Northam; Nikolaj Coster-Waldau; Tom Hollander; Donald Sumpter; Matthew Macfadyen,Mystery; Drama; Thriller; Romance; War
@@ -32,6 +33,7 @@ tt1535109,Captain Phillips,2013,Paul Greengrass,Tom Hanks; Barkhad Abdi; Barkhad
 tt1951261,The Hangover Part III,2013,Todd Phillips,Bradley Cooper; Ed Helms; Zach Galifianakis; Justin Bartha; Ken Jeong; John Goodman; Melissa McCarthy; Jeffrey Tambor,Comedy
 tt0088944,Commando,1985,Mark L. Lester,Arnold Schwarzenegger; Rae Dawn Chong; Dan Hedaya; Vernon Wells; James Olson; David Patrick Kelly; Alyssa Milano; Bill Duke,Action; Adventure; Thriller
 tt0076759,Star Wars,1977,George Lucas,Mark Hamill; Harrison Ford; Carrie Fisher; Peter Cushing; Alec Guinness; Anthony Daniels; Kenny Baker; Peter Mayhew,Adventure; Action; Science Fiction
+tt27534307,Speak No Evil,2024,James Watkins,James McAvoy; Mackenzie Davis; Scoot McNairy,Drama; Horror; Thriller
 tt0066206,Patton,1970,Franklin J. Schaffner,George C. Scott; Stephen Young; Frank Latimore; Karl Michael Vogler; Karl Malden; Michael Strong; Carey Loftin; Lawrence Dobkin,War; Drama; History
 tt0482571,The Prestige,2006,Christopher Nolan,Hugh Jackman; Christian Bale; Michael Caine; Piper Perabo; Rebecca Hall; Scarlett Johansson; Samantha Mahurin; David Bowie,Drama; Mystery; Science Fiction
 tt1130884,Shutter Island,2010,Martin Scorsese,Leonardo DiCaprio; Mark Ruffalo; Ben Kingsley; Max von Sydow; Michelle Williams; Emily Mortimer; Patricia Clarkson; Jackie Earle Haley,Drama; Thriller; Mystery
@@ -301,13 +303,13 @@ tt7286456,Joker,2019,Todd Phillips,Joaquin Phoenix; Robert De Niro; Zazie Beetz;
 tt1606378,A Good Day to Die Hard,2013,John Moore,Bruce Willis; Jai Courtney; Sebastian Koch; Yuliya Snigir; Radivoje Bukvić; Cole Hauser; Sergey Kolesnikov; Amaury Nolasco,Action; Thriller
 tt6343314,Creed II,2018,Steven Caple Jr.,Michael B. Jordan; Sylvester Stallone; Tessa Thompson; Wood Harris; Russell Hornsby; Phylicia Rashād; Dolph Lundgren; Florian Munteanu,Drama; Action
 tt0818086,Back to the Future (Part II): Behind-the-Scenes Special Presentation,1989,Mark Cowen,Lindsey Whitney Barry; Rick Carter; Michael J. Fox; Bob Gale; Leslie Nielsen; Oliver Theess; Robert Zemeckis; Dirty Denny,TV Movie; Documentary
-tt1816012,The World at War: The Making of the Series,1989,Unknown,Adolf Hitler; Jeremy Isaacs; Albert Speer,History; Documentary; War
+tt1816012,The World at War: The Making of the Series,1989,Peter Tiffin,Adolf Hitler; Jeremy Isaacs; Albert Speer,Documentary
 tt1345836,The Dark Knight Rises,2012,Christopher Nolan,Christian Bale; Gary Oldman; Tom Hardy; Joseph Gordon-Levitt; Anne Hathaway; Marion Cotillard; Morgan Freeman; Michael Caine,Action; Crime; Drama; Thriller
 tt1454468,Gravity,2013,Alfonso Cuarón,Sandra Bullock; George Clooney; Ed Harris; Orto Ignatiussen; Phaldut Sharma; Amy Warren; Basher Savage,Science Fiction; Thriller; Drama
 tt0903624,The Hobbit: An Unexpected Journey,2012,Peter Jackson,Martin Freeman; Ian McKellen; Richard Armitage; James Nesbitt; Ken Stott; Sylvester McCoy; Barry Humphries; Dean O'Gorman,Adventure; Fantasy; Action
 tt0421715,The Curious Case of Benjamin Button,2008,David Fincher,Brad Pitt; Cate Blanchett; Taraji P. Henson; Julia Ormond; Jason Flemyng; Tilda Swinton; Mahershala Ali; Jared Harris,Drama; Fantasy; Romance
 tt5208252,Operation Finale,2018,Chris Weitz,Oscar Isaac; Ben Kingsley; Mélanie Laurent; Peter Strauss; Nick Kroll; Lior Raz; Michael Aronov; Ohad Knoller,Drama; History; Thriller
-tt3323366,2001: A Space Odyssey - A Look Behind the Future,1966,Unknown,Vernon Myers; Arthur C. Clarke; Anthony Masters; Keir Dullea; Stanley Kubrick; Gary Lockwood,Documentary
+tt3323366,2001: A Space Odyssey - A Look Behind the Future,1966,,Vernon Myers; Fred Ordway; Harry Lange,Documentary; Short; Sci-Fi
 tt0770828,Man of Steel,2013,Zack Snyder,Henry Cavill; Amy Adams; Russell Crowe; Michael Shannon; Kevin Costner; Laurence Fishburne; Diane Lane; Ayelet Zurer,Action; Adventure; Science Fiction
 tt1637688,In Time,2011,Andrew Niccol,Justin Timberlake; Amanda Seyfried; Cillian Murphy; Olivia Wilde; Alex Pettyfer; Johnny Galecki; Matt Bomer; Vincent Kartheiser,Action; Thriller; Science Fiction
 tt6751668,Parasite,2019,Bong Joon Ho,Song Kang-ho; Lee Sun-kyun; Cho Yeo-jeong; Choi Woo-shik; Park So-dam; Lee Jung-eun; Jang Hye-jin; Park Myung-hoon,Comedy; Thriller; Drama
@@ -549,7 +551,7 @@ tt0088571,Moonlighting,1985,Glenn Gordon Caron,Cybill Shepherd; Bruce Willis; Al
 tt0081863,Flamingo Road,1981,Rita Lakin; Robert Wilder,John Beck; Woody Brown; Howard Duff; Morgan Fairchild; Mark Harmon; Kevin McCarthy; Cristina Raines; Barbara Rush,Soap; Drama
 ,The Game of Thrones Reunion Hosted by Conan O'Brien,2021,,,
 tt0121955,South Park,1997,Matt Stone; Trey Parker,Trey Parker; Matt Stone; Mona Marshall; Jennifer Howell,Animation; Comedy
-tt27713897,Arnold,2023,Unknown,Arnold Schwarzenegger; Sylvester Stallone,Documentary
+tt27713897,Arnold,2023,,Arnold Schwarzenegger; James Cameron; Sylvester Stallone,Documentary; Biography
 tt0455275,Prison Break,2005,Paul T. Scheuring,Wentworth Miller; Dominic Purcell; Sarah Wayne Callies; Paul Adelstein; Rockmond Dunbar; Robert Knepper; Amaury Nolasco; Inbar Lavi,Action & Adventure; Crime; Drama
 tt0055683,The Jetsons,1962,William Hanna; Joseph Barbera,George O'Hanlon; Penny Singleton; Daws Butler; Janet Waldo; Jean Vander Pyl; Don Messick; Mel Blanc; Frank Welker,Animation; Comedy; Family; Kids
 tt0083437,Knight Rider,1982,Glen A. Larson,David Hasselhoff; Edward Mulhare; William Daniels; Patricia McPherson; Peter Parros,Action & Adventure; Drama; Sci-Fi & Fantasy; Crime
@@ -567,7 +569,7 @@ tt0096657,Mr. Bean,1990,Richard Curtis; Rowan Atkinson,Rowan Atkinson,Comedy
 tt0096697,The Simpsons,1989,Matt Groening,Dan Castellaneta; Julie Kavner; Nancy Cartwright; Yeardley Smith; Hank Azaria; Harry Shearer,Family; Animation; Comedy
 tt0279600,Smallville,2001,Alfred Gough; Miles Millar,Tom Welling; Erica Durance; Cassidy Freeman; Justin Hartley,Sci-Fi & Fantasy; Action & Adventure; Drama
 tt0411008,Lost,2004,J.J. Abrams; Damon Lindelof; Jeffrey Lieber,Matthew Fox; Evangeline Lilly; Terry O'Quinn; Josh Holloway; Michael Emerson; Jorge Garcia; Naveen Andrews; Jeff Fahey,Mystery; Action & Adventure; Drama
-tt0185906,Band of Brothers,2001,Unknown,Michael Cudlitz; Rick Gomez; Scott Grimes; Damian Lewis; Ron Livingston; James Madio; Neal McDonough; Donnie Wahlberg,Drama; War & Politics
+tt0185906,Band of Brothers,2001,,Scott Grimes; Damian Lewis; Ron Livingston,Action; Drama; History
 tt0090390,ALF,1986,Paul Fusco; Tom Patchett,Paul Fusco; Andrea Elson; Max Wright; Anne Schedeen; Benji Gregory,Family; Comedy; Drama
 tt2356777,True Detective,2014,Nic Pizzolatto; Issa López,Jodie Foster; Kali Reis; Fiona Shaw; Finn Bennett; Isabella Star LaBlanc; John Hawkes,Drama; Mystery
 tt2188671,Bates Motel,2013,Anthony Cipriano; Carlton Cuse; Kerry Ehrin,Vera Farmiga; Freddie Highmore; Max Thieriot; Olivia Cooke; Nestor Carbonell,Drama; Crime; Mystery
@@ -596,11 +598,11 @@ tt5071412,Ozark,2017,Mark Williams; Bill Dubuque,Jason Bateman; Laura Linney; So
 tt5753856,Dark,2017,Baran bo Odar; Jantje Friese,Louis Hofmann,Crime; Drama; Sci-Fi & Fantasy; Mystery
 tt7263154,Undercover,2019,Piet Matthys; Bart Uytdenhouwen; Nico Moolenaar,Tom Waes; Frank Lammers; Elise Schaap; Jeroen Van der Ven; Ruth Becquart; Murat Seven; Nazmiye Oral; Gökhan Girginol,Crime; Drama
 tt7366338,Chernobyl,2019,Craig Mazin,Jared Harris; Stellan Skarsgård; Emily Watson; Paul Ritter; Jessie Buckley; Adam Nagaitis; Sam Troughton; Robert Emms,Drama
-tt7949606,The Last Czars,2019,Unknown,Robert Jack; Oliver Dimsdale; Samuel Collings; Ben Cartwright; Elsie Bennett; Susanna Herbert,Drama; War & Politics; Documentary
+tt7949606,The Last Czars,2019,,Robert Jack; Susanna Herbert; Ben Cartwright,Documentary; Drama; History
 tt5952634,The Spy,2019,Gideon Raff,Sacha Baron Cohen; Noah Emmerich; Hadar Ratzon Rotem; Alexander Siddig; Waleed Zuaiter; Nassim Lyes; Moni Moshonov; Yael Eitan,Drama
 tt10857160,She-Hulk: Attorney at Law,2022,Jessica Gao,Tatiana Maslany; Ginger Gonzaga; Jameela Jamil; Renée Elise Goldsberry; Josh Segarra,Comedy; Sci-Fi & Fantasy
 tt0081858,Falcon Crest,1981,"Earl Hamner, Jr.",Jane Wyman; David Selby; Lorenzo Lamas; Gregory Harrison; Kristian Alfonso; Chao-Li Chi; Wendy Phillips; Andrea Thompson,Soap; Drama
 tt0126158,He-Man and the Masters of the Universe,1983,Roger Sweet,John Erwin; Alan Oppenheimer; Linda Gary; Lou Scheimer; Erika Scheimer,Action & Adventure; Animation; Sci-Fi & Fantasy; Kids
 tt10919420,Squid Game,2021,Hwang Dong-hyuk,Lee Jung-jae; Wi Ha-jun; Yim Si-wan; Jo Yu-ri; Lee Byung-hun; Park Gyu-young; Kang Ae-sim; Yang Dong-geun,Action & Adventure; Mystery; Drama
-tt11198330,House of the Dragon,2022,Unknown,,Unknown
+tt11198330,House of the Dragon,2022,,Matt Smith; Emma D'Arcy; Olivia Cooke,Action; Adventure; Drama
 tt11280740,Severance,2022,Dan Erickson,Adam Scott; Britt Lower; Tramell Tillman; Zach Cherry; Jen Tullock; Dichen Lachman; Sarah Bock; John Turturro,Drama; Mystery; Sci-Fi & Fantasy
