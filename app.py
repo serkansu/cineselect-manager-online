@@ -1227,85 +1227,86 @@ def show_favorites(fav_type, label):
             if fav.get("genres"):
                 link_list(fav["genres"], "genre", "📚", "Genres")
 
-            # --- Refresh Button for each favorite (IMDb & RT) ---
-            if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}"):
-                imdb_id = (fav.get("imdb") or "").strip()
-                title = fav.get("title")
-                year = fav.get("year")
-                is_series = (fav.get("type") == "show")
-                # 1) IMDb ID guarantee
-                if not imdb_id or imdb_id == "tt0000000":
-                    imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
-                    st.info(f"🎬 IMDb ID TMDb'den alındı: {imdb_id}")
-                # IMDb ID doğrulama/düzeltme (OMDb sorgusundan önce)
-                imdb_id = validate_imdb_id(imdb_id, title, year) or imdb_id
+            # --- IMDb&RT ve Full Meta butonlarını yan yana ve küçük göster ---
+            btn_cols = st.columns([1, 1])
+            with btn_cols[0]:
+                if st.button("🔄 IMDb&RT", key=f"refresh_{fav['id']}", use_container_width=True):
+                    imdb_id = (fav.get("imdb") or "").strip()
+                    title = fav.get("title")
+                    year = fav.get("year")
+                    is_series = (fav.get("type") == "show")
+                    # 1) IMDb ID guarantee
+                    if not imdb_id or imdb_id == "tt0000000":
+                        imdb_id = get_imdb_id_from_tmdb(title, year, is_series=is_series)
+                        st.info(f"🎬 IMDb ID TMDb'den alındı: {imdb_id}")
+                    # IMDb ID doğrulama/düzeltme (OMDb sorgusundan önce)
+                    imdb_id = validate_imdb_id(imdb_id, title, year) or imdb_id
 
-                stats = {}
-                raw_id = {}
-                raw_title = {}
-                source = None
+                    stats = {}
+                    raw_id = {}
+                    raw_title = {}
+                    source = None
 
-                # 2a) Try seed_ratings.csv
-                seed_hit = read_seed_rating(imdb_id)
-                if seed_hit and (seed_hit.get("imdb_rating") or seed_hit.get("rt")):
-                    stats = {"imdb_rating": seed_hit.get("imdb_rating"), "rt": seed_hit.get("rt")}
-                    source = "CSV"
+                    # 2a) Try seed_ratings.csv
+                    seed_hit = read_seed_rating(imdb_id)
+                    if seed_hit and (seed_hit.get("imdb_rating") or seed_hit.get("rt")):
+                        stats = {"imdb_rating": seed_hit.get("imdb_rating"), "rt": seed_hit.get("rt")}
+                        source = "CSV"
 
-                # 2b) If missing/empty → OMDb by ID
-                if not source:
-                    if imdb_id:
-                        stats = get_ratings(imdb_id) or {}
-                        raw_id = (stats.get("raw") or {})
-                        source = "CSV/OMDb-ID" if raw_id else None
+                    # 2b) If missing/empty → OMDb by ID
+                    if not source:
+                        if imdb_id:
+                            stats = get_ratings(imdb_id) or {}
+                            raw_id = (stats.get("raw") or {})
+                            source = "CSV/OMDb-ID" if raw_id else None
 
-                # OMDb-ID fallback: if both ratings are 0, try fetch_ratings by title/year
-                if not stats or (float(stats.get("imdb_rating") or 0) == 0.0 and int(stats.get("rt") or 0) == 0):
-                    ir, rt, raw_title = fetch_ratings(title, year)
-                    stats = {"imdb_rating": ir, "rt": rt}
-                    source = "OMDb-title (auto-fallback)"
+                    # OMDb-ID fallback: if both ratings are 0, try fetch_ratings by title/year
+                    if not stats or (float(stats.get("imdb_rating") or 0) == 0.0 and int(stats.get("rt") or 0) == 0):
+                        ir, rt, raw_title = fetch_ratings(title, year)
+                        stats = {"imdb_rating": ir, "rt": rt}
+                        source = "OMDb-title (auto-fallback)"
 
-                imdb_rating = float(stats.get("imdb_rating") or 0.0)
-                rt_score = int(stats.get("rt") or 0)
+                    imdb_rating = float(stats.get("imdb_rating") or 0.0)
+                    rt_score = int(stats.get("rt") or 0)
 
-                # --- Debug log before updating Firestore ---
-                st.info(f"🎬 Refresh Debug → Title='{title}' ({year}) | IMDb ID={imdb_id} | IMDb={imdb_rating} | RT={rt_score}")
+                    # --- Debug log before updating Firestore ---
+                    st.info(f"🎬 Refresh Debug → Title='{title}' ({year}) | IMDb ID={imdb_id} | IMDb={imdb_rating} | RT={rt_score}")
 
-                # Update Firestore
-                db.collection("favorites").document(fav["id"]).update({
-                    "imdb": imdb_id,
-                    "imdbRating": imdb_rating,
-                    "rt": rt_score,
-                })
-
-                # Update seed_ratings.csv
-                append_seed_rating(
-                    imdb_id=imdb_id,
-                    title=title,
-                    year=year,
-                    imdb_rating=imdb_rating,
-                    rt_score=rt_score,
-                )
-
-                st.success(f"✅ {title} IMDb & RT yenilendi. (IMDb={imdb_rating}, RT={rt_score}%)")
-                st.rerun()
-            # --- /Refresh Button ---
-            # --- Full Metadata Button ---
-            if st.button("🎬 Full Meta", key=f"fullmeta_{fav['id']}"):
-                imdb_id = (fav.get("imdb") or "").strip()
-                title = fav.get("title")
-                year = fav.get("year")
-                is_series = (fav.get("type") == "show")
-
-                new_meta = fetch_metadata(imdb_id, title, year, is_series=is_series)
-                if new_meta:
+                    # Update Firestore
                     db.collection("favorites").document(fav["id"]).update({
-                        "directors": new_meta.get("directors", []),
-                        "cast": new_meta.get("cast", []),
-                        "genres": new_meta.get("genres", []),
+                        "imdb": imdb_id,
+                        "imdbRating": imdb_rating,
+                        "rt": rt_score,
                     })
-                    append_seed_meta(imdb_id, title, year, new_meta)
-                    st.success(f"✅ Metadata updated for {title} ({year})")
+
+                    # Update seed_ratings.csv
+                    append_seed_rating(
+                        imdb_id=imdb_id,
+                        title=title,
+                        year=year,
+                        imdb_rating=imdb_rating,
+                        rt_score=rt_score,
+                    )
+
+                    st.success(f"✅ {title} IMDb & RT yenilendi. (IMDb={imdb_rating}, RT={rt_score}%)")
                     st.rerun()
+            with btn_cols[1]:
+                if st.button("🎬 Full Meta", key=f"fullmeta_{fav['id']}", use_container_width=True):
+                    imdb_id = (fav.get("imdb") or "").strip()
+                    title = fav.get("title")
+                    year = fav.get("year")
+                    is_series = (fav.get("type") == "show")
+
+                    new_meta = fetch_metadata(imdb_id, title, year, is_series=is_series)
+                    if new_meta:
+                        db.collection("favorites").document(fav["id"]).update({
+                            "directors": new_meta.get("directors", []),
+                            "cast": new_meta.get("cast", []),
+                            "genres": new_meta.get("genres", []),
+                        })
+                        append_seed_meta(imdb_id, title, year, new_meta)
+                        st.success(f"✅ Metadata updated for {title} ({year})")
+                        st.rerun()
         with cols[2]:
             if st.button("❌", key=f"remove_{fav['id']}"):
                 db.collection("favorites").document(fav["id"]).delete()
