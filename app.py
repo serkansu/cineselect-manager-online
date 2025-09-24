@@ -471,6 +471,7 @@ def read_seed_rating(imdb_id: str):
     return None
 # --- /seed okuma fonksiyonu ---
 
+# --- seed_meta.csv ekleme fonksiyonu ---
 def overwrite_seed_meta(docs):
     """seed_meta.csv'yi Firestore'dan tamamen yeniden yazar."""
     try:
@@ -488,6 +489,33 @@ def overwrite_seed_meta(docs):
                 w.writerow([imdb_id, title, year, directors, cast, genres])
     except Exception as e:
         print("overwrite_seed_meta error:", e)
+
+def append_seed_meta(imdb_id, title, year, meta):
+    """seed_meta.csv'ye (yoksa) yeni satır ekler; varsa dokunmaz."""
+    if not imdb_id or imdb_id == "tt0000000":
+        return
+    exists = False
+    if SEED_META_PATH.exists():
+        with SEED_META_PATH.open(newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                if r.get("imdb_id") == imdb_id:
+                    exists = True
+                    break
+    if exists:
+        return
+    write_header = not SEED_META_PATH.exists() or SEED_META_PATH.stat().st_size == 0
+    with SEED_META_PATH.open("a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if write_header:
+            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
+        w.writerow([
+            imdb_id,
+            title,
+            str(year or ""),
+            "; ".join(meta.get("directors", [])),
+            "; ".join(meta.get("cast", [])),
+            "; ".join(meta.get("genres", [])),
+        ])
 # --- /seed okuma fonksiyonu ---
 def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     tmdb_api_key = os.getenv("TMDB_API_KEY")
