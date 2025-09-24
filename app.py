@@ -818,11 +818,19 @@ def sync_with_firebase(sort_mode="cc"):
     series_docs = list(db.collection("favorites").where("type", "==", "show").stream())
     all_docs = movie_docs + series_docs
     overwrite_seed_meta(all_docs)
-    # For missing_metadata.csv, you may have a dedicated collection or logic; adjust as needed.
-    # If you want to export all documents where metadata is missing:
-    # Example: missing_docs = db.collection("missing_metadata").stream()
-    # For now, just clear missing_metadata.csv to empty
-    overwrite_missing_meta([])
+
+    # Build missing_docs list based on Firestore docs with missing metadata
+    missing_docs = []
+    for d in all_docs:
+        data = d.to_dict()
+        dirs = data.get("directors") or []
+        cast = data.get("cast") or []
+        genres = data.get("genres") or []
+        # Consider missing if any key fields are empty or contain only "Unknown"
+        if (not dirs or dirs == ["Unknown"]) or (not cast) or (not genres or genres == ["Unknown"]):
+            missing_docs.append(d)
+
+    overwrite_missing_meta(missing_docs)
 
     # GitHub'a push et (tüm CSV dosyaları dahil)
     push_favorites_to_github()
