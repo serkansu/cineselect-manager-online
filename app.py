@@ -7,6 +7,7 @@ for param, sskey in [
     ("filter_director", "filter_director"),
     ("filter_actor", "filter_actor"),
     ("filter_genre", "filter_genre"),
+    ("filter_created_by", "filter_created_by"),
 ]:
     val = qp.get(param)
     # Normalize (Streamlit may give list or str)
@@ -14,7 +15,6 @@ for param, sskey in [
         val = val[0] if val else None
     if val:
         st.session_state[sskey] = val
-
     else:
         # Only clear if not present in query params (don't clear if already set by button)
         if sskey not in st.session_state:
@@ -121,25 +121,33 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # --- TV shows: use created_by if directors is empty or ["Unknown"], always propagate created_by for TV
+                        # --- TV shows: use created_by if directors is empty or ["Unknown"], always propagate created_by for TV/Show
                         created_by = []
-                        if search_type == "tv":
+                        if search_type in ["tv", "show"]:
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
                             if not directors or directors == ["Unknown"]:
                                 # For TV, if directors missing, leave directors empty
                                 directors = []
-                            tmdb_result = {"directors": directors, "cast": cast, "genres": genres, "created_by": created_by}
-                        else:
-                            if not directors:
-                                directors = ["Unknown"]
-                            if not genres:
-                                genres = ["Unknown"]
-                            tmdb_result = {"directors": directors, "cast": cast, "genres": genres}
+                        if not directors:
+                            directors = ["Unknown"]
+                        if not genres:
+                            genres = ["Unknown"]
+                        tmdb_result = {
+                            "directors": directors,
+                            "cast": cast,
+                            "genres": genres,
+                            "created_by": created_by
+                        }
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
     # Merge fetched data, OMDb preferred
-    meta = omdb_result or tmdb_result or {"directors": ["Unknown"], "cast": [], "genres": ["Unknown"]}
+    meta = omdb_result or tmdb_result or {
+        "directors": ["Unknown"],
+        "cast": [],
+        "genres": ["Unknown"],
+        "created_by": []
+    }
 
     # --- Only fill empty fields; keep existing manual values if present ---
     if existing is not None:
@@ -1169,7 +1177,8 @@ st.subheader("❤️ Your Favorites")
 sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], index=2)
 
 
-# Build directors, actors, genres lists based on selected media_type
+#
+# Build directors, actors, genres, created_by lists based on selected media_type
 if media_type == "Movie":
     source_docs = db.collection("favorites").where("type", "==", "movie").stream()
 elif media_type == "TV Show":
@@ -1193,24 +1202,52 @@ else:
     source_docs = []
 genres = sorted({g for doc in source_docs for g in (doc.to_dict().get("genres") or [])})
 
+# For created_by: only for TV Show
+created_by_list = []
+if media_type == "TV Show":
+    source_docs = db.collection("favorites").where("type", "==", "show").stream()
+    created_by_list = sorted({cb for doc in source_docs for cb in (doc.to_dict().get("created_by") or [])})
 
 ## --- Unified filter row (stateless, no query_params) ---
-col1, col2, col3 = st.columns(3)
-with col1:
-    selected_directors = st.multiselect(
-        "🎬 Filter by Director", directors,
-        default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
-    )
-with col2:
-    selected_actors = st.multiselect(
-        "🎭 Filter by Actor", actors,
-        default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
-    )
-with col3:
-    selected_genres = st.multiselect(
-        "🎞 Filter by Genre", genres,
-        default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
-    )
+if media_type == "TV Show":
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        selected_directors = st.multiselect(
+            "🎬 Filter by Director", directors,
+            default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
+        )
+    with col2:
+        selected_actors = st.multiselect(
+            "🎭 Filter by Actor", actors,
+            default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
+        )
+    with col3:
+        selected_genres = st.multiselect(
+            "🎞 Filter by Genre", genres,
+            default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
+        )
+    with col4:
+        selected_created_by = st.multiselect(
+            "🎬 Filter by Created by", created_by_list,
+            default=[st.session_state["filter_created_by"]] if st.session_state.get("filter_created_by") else []
+        )
+else:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        selected_directors = st.multiselect(
+            "🎬 Filter by Director", directors,
+            default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
+        )
+    with col2:
+        selected_actors = st.multiselect(
+            "🎭 Filter by Actor", actors,
+            default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
+        )
+    with col3:
+        selected_genres = st.multiselect(
+            "🎞 Filter by Genre", genres,
+            default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
+        )
     
 def get_sort_key(fav):
     try:
@@ -1238,17 +1275,24 @@ def show_favorites(fav_type, label):
     # Apply genre filter(s) if selected
     if selected_genres:
         favorites = [f for f in favorites if any(g in (f.get("genres", []) or []) for g in selected_genres)]
-
-    # --- Also support single-click filter by director, actor, genre via session_state ---
+    # Apply created_by filter(s) if present (for shows only)
+    if fav_type == "show":
+        # selected_created_by is only defined if media_type == "TV Show"
+        if "selected_created_by" in globals() and selected_created_by:
+            favorites = [f for f in favorites if any(cb in (f.get("created_by") or []) for cb in selected_created_by)]
+    # --- Also support single-click filter by director, actor, genre, created_by via session_state ---
     fd = st.session_state.get("filter_director")
     fa = st.session_state.get("filter_actor")
     fg = st.session_state.get("filter_genre")
+    fcb = st.session_state.get("filter_created_by")
     if fd:
         favorites = [f for f in favorites if fd in f.get("directors",[])]
     if fa:
         favorites = [f for f in favorites if fa in f.get("cast",[])]
     if fg:
         favorites = [f for f in favorites if fg in f.get("genres",[])]
+    if fav_type == "show" and fcb:
+        favorites = [f for f in favorites if fcb in (f.get("created_by") or [])]
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
@@ -1293,7 +1337,7 @@ def show_favorites(fav_type, label):
 
             # Directors / Created by (label differs for shows)
             if fav.get("type") == "show" and fav.get("created_by"):
-                link_list(fav.get("created_by", []), "director", "🎬", "Created by")
+                link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
             elif fav.get("directors"):
                 link_list(fav["directors"], "director", "🎬", "Directors")
             # Cast
