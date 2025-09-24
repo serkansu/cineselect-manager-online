@@ -23,30 +23,22 @@ for param, sskey in [
 # Eksik metadata durumunda missing_metadata.csv dosyasına ekleme fonksiyonu
 import csv
 
-def append_missing_meta(title, year, imdb_id="", note="", doc_id="", poster=""):
-    """
-    Eksik metadata durumunda missing_metadata.csv dosyasına ekler.
-    Artık doc_id ve poster da içerir.
-    """
-    try:
-        file_exists = False
-        try:
-            with open("missing_metadata.csv", "r", newline="", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                headers = next(reader, None)
-                file_exists = headers is not None
-        except FileNotFoundError:
-            file_exists = False
 
-        with open("missing_metadata.csv", "a", newline="", encoding="utf-8") as f:
+def overwrite_missing_meta(docs):
+    """missing_metadata.csv'yi Firestore'dan tamamen yeniden yazar."""
+    try:
+        with open("missing_metadata.csv", "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            if not file_exists:
-                writer.writerow(["doc_id", "title", "year", "imdb_id", "note", "poster"])
-            writer.writerow([
-                doc_id or "", title or "", year or "", imdb_id or "", note or "", poster or ""
-            ])
+            writer.writerow(["title", "year", "imdb_id", "note"])
+            for doc in docs:
+                item = doc.to_dict()
+                title = item.get("title", "")
+                year = item.get("year", "")
+                imdb_id = item.get("imdb", "") or item.get("imdb_id", "")
+                note = item.get("note", "")
+                writer.writerow([title, year, imdb_id, note])
     except Exception as e:
-        print(f"append_missing_meta error: {e}")
+        print(f"overwrite_missing_meta error: {e}")
 
 # Eksik csv dosyalarını garantiye al
 import os
@@ -479,89 +471,23 @@ def read_seed_rating(imdb_id: str):
     return None
 # --- /seed okuma fonksiyonu ---
 
-def append_seed_meta(imdb_id, title, year, meta):
-    """seed_meta.csv'ye metadata ekler (yönetmen, oyuncu, tür). Eğer imdb_id zaten varsa, ilgili satırı günceller."""
-    if not imdb_id or imdb_id == "tt0000000":
-        return
+def overwrite_seed_meta(docs):
+    """seed_meta.csv'yi Firestore'dan tamamen yeniden yazar."""
     try:
-        # --- Migration: ensure header includes genres ---
-        if SEED_META_PATH.exists() and SEED_META_PATH.stat().st_size > 0:
-            with SEED_META_PATH.open("r+", newline="", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-                if rows and "genres" not in rows[0]:
-                    # eski dosya, başlıkları güncelle
-                    headers = rows[0] + ["genres"]
-                    new_rows = [headers] + [r + ["Unknown"] for r in rows[1:]]
-                    f.seek(0)
-                    writer = csv.writer(f)
-                    writer.writerows(new_rows)
-                    f.truncate()
-
-        # Ensure genres is not empty; if so, set to ["Unknown"]
-        genres = meta.get("genres", [])
-        if not genres:
-            genres = ["Unknown"]
-        # Directors: if empty and created_by exists, use created_by as directors (for TV shows)
-        directors = meta.get("directors", [])
-        if not directors and meta.get("created_by"):
-            directors = meta.get("created_by", [])
-
-        # Always use these headers
-        headers = ["imdb_id", "title", "year", "directors", "cast", "genres"]
-        rows = []
-        found = False
-        # Read all rows (if file exists)
-        if SEED_META_PATH.exists() and SEED_META_PATH.stat().st_size > 0:
-            with SEED_META_PATH.open("r", newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if (row.get("imdb_id") or "").strip() == imdb_id:
-                        # Replace with new metadata
-                        rows.append({
-                            "imdb_id": imdb_id,
-                            "title": title or "",
-                            "year": str(year or ""),
-                            "directors": "; ".join(directors),
-                            "cast": "; ".join(meta.get("cast", [])),
-                            "genres": "; ".join(genres),
-                        })
-                        found = True
-                    else:
-                        # Keep as is
-                        rows.append({
-                            "imdb_id": row.get("imdb_id", ""),
-                            "title": row.get("title", ""),
-                            "year": row.get("year", ""),
-                            "directors": row.get("directors", ""),
-                            "cast": row.get("cast", ""),
-                            "genres": row.get("genres", ""),
-                        })
-        if not found:
-            # Append new row
-            rows.append({
-                "imdb_id": imdb_id,
-                "title": title or "",
-                "year": str(year or ""),
-                "directors": "; ".join(directors),
-                "cast": "; ".join(meta.get("cast", [])),
-                "genres": "; ".join(genres),
-            })
-        # Write back all rows with headers
         with SEED_META_PATH.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({
-                    "imdb_id": row.get("imdb_id", ""),
-                    "title": row.get("title", ""),
-                    "year": row.get("year", ""),
-                    "directors": row.get("directors", ""),
-                    "cast": row.get("cast", ""),
-                    "genres": row.get("genres", ""),
-                })
+            w = csv.writer(f)
+            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
+            for doc in docs:
+                item = doc.to_dict()
+                imdb_id = item.get("imdb", "")
+                title = item.get("title", "")
+                year = item.get("year", "")
+                directors = "; ".join(item.get("directors", []))
+                cast = "; ".join(item.get("cast", []))
+                genres = "; ".join(item.get("genres", []))
+                w.writerow([imdb_id, title, year, directors, cast, genres])
     except Exception as e:
-        print("append_seed_meta error:", e)
+        print("overwrite_seed_meta error:", e)
 # --- /seed okuma fonksiyonu ---
 def get_imdb_id_from_tmdb(title, year=None, is_series=False):
     tmdb_api_key = os.getenv("TMDB_API_KEY")
@@ -863,17 +789,6 @@ def sync_with_firebase(sort_mode="cc"):
                 item["rt"] = int(rt_score) if rt_score is not None else 0
                 # ⬇️ YENİ: seed_ratings.csv’ye (yoksa) ekle
                 append_seed_rating(imdb_id, title, year, imdb_rating, rt_score)
-                # ⬇️ YENİ: seed_meta.csv ve Firestore için meta kaydet
-                append_seed_meta(
-                    imdb_id,
-                    title,
-                    year,
-                    {
-                        "directors": item.get("directors", []),
-                        "cast": item.get("cast", []),
-                        "genres": item.get("genres", []),
-                    }
-                )
     # seed_ratings.csv içinde her favorinin olduğundan emin ol (CSV'de zaten varsa eklenmez)
     for _section in ("movies", "shows"):
         for _it in favorites_data.get(_section, []):
@@ -897,6 +812,17 @@ def sync_with_firebase(sort_mode="cc"):
         json.dump(output_data, f, ensure_ascii=False, indent=4)
         st.write("🔍 FAVORITES DEBUG (output):", output_data)
     st.success("✅ favorites.json dosyası yerel olarak oluşturuldu.")
+
+    # --- Overwrite seed_meta.csv and missing_metadata.csv from Firestore ---
+    movie_docs = list(db.collection("favorites").where("type", "==", "movie").stream())
+    series_docs = list(db.collection("favorites").where("type", "==", "show").stream())
+    all_docs = movie_docs + series_docs
+    overwrite_seed_meta(all_docs)
+    # For missing_metadata.csv, you may have a dedicated collection or logic; adjust as needed.
+    # If you want to export all documents where metadata is missing:
+    # Example: missing_docs = db.collection("missing_metadata").stream()
+    # For now, just clear missing_metadata.csv to empty
+    overwrite_missing_meta([])
 
     # GitHub'a push et (tüm CSV dosyaları dahil)
     push_favorites_to_github()
