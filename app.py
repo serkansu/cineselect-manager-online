@@ -222,11 +222,15 @@ def backfill_metadata(limit=20):
             if not meta.get("genres"):
                 meta["genres"] = ["Unknown"]
             try:
-                db.collection(collection).document(item["id"]).update({
+                update_data = {
                     "directors": meta.get("directors", []),
-                    "cast": meta.get("cast", []),
-                    "genres": meta.get("genres", []),
-                })
+                    "cast":      meta.get("cast", []),
+                    "genres":    meta.get("genres", []),
+                }
+                if type_name == "show":
+                    # fetch_metadata TV için 'created_by' döndürürse yaz
+                    update_data["created_by"] = meta.get("created_by", [])
+                db.collection(collection).document(item["id"]).update(update_data)
                 append_seed_meta(imdb_id, title, year, meta)   # ✅ CSV’ye de yaz
                 updated += 1
                 status.write(f"✅ Updated: {title} ({year}) [{idx}/{total}] via {meta_source}")
@@ -514,16 +518,17 @@ def overwrite_seed_meta(docs):
     try:
         with SEED_META_PATH.open("w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
-            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
+            w.writerow(["imdb_id", "title", "year", "directors", "created_by", "cast", "genres"])
             for doc in docs:
                 item = doc.to_dict()
                 imdb_id = item.get("imdb", "")
                 title = item.get("title", "")
                 year = item.get("year", "")
-                directors = "; ".join(item.get("directors", []))
-                cast = "; ".join(item.get("cast", []))
-                genres = "; ".join(item.get("genres", []))
-                w.writerow([imdb_id, title, year, directors, cast, genres])
+                directors   = "; ".join(item.get("directors", []))
+                created_by  = "; ".join(item.get("created_by", []))
+                cast        = "; ".join(item.get("cast", []))
+                genres      = "; ".join(item.get("genres", []))
+                w.writerow([imdb_id, title, year, directors, created_by, cast, genres])
     except Exception as e:
         print("overwrite_seed_meta error:", e)
 
@@ -544,12 +549,13 @@ def append_seed_meta(imdb_id, title, year, meta):
     with SEED_META_PATH.open("a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if write_header:
-            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
+            w.writerow(["imdb_id", "title", "year", "directors", "created_by", "cast", "genres"])
         w.writerow([
             imdb_id,
             title,
             str(year or ""),
             "; ".join(meta.get("directors", [])),
+            "; ".join(meta.get("created_by", [])) if "created_by" in meta else "",
             "; ".join(meta.get("cast", [])),
             "; ".join(meta.get("genres", [])),
         ])
