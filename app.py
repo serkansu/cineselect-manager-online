@@ -552,7 +552,14 @@ def append_seed_meta(imdb_id, title, year, meta):
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             for row in rows:
-                writer.writerow(row)
+                writer.writerow({
+                    "imdb_id": row.get("imdb_id", ""),
+                    "title": row.get("title", ""),
+                    "year": row.get("year", ""),
+                    "directors": row.get("directors", ""),
+                    "cast": row.get("cast", ""),
+                    "genres": row.get("genres", ""),
+                })
     except Exception as e:
         print("append_seed_meta error:", e)
 # --- /seed okuma fonksiyonu ---
