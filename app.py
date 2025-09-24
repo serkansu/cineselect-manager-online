@@ -480,7 +480,7 @@ def read_seed_rating(imdb_id: str):
 # --- /seed okuma fonksiyonu ---
 
 def append_seed_meta(imdb_id, title, year, meta):
-    """seed_meta.csv'ye metadata ekler (yönetmen, oyuncu, tür)."""
+    """seed_meta.csv'ye metadata ekler (yönetmen, oyuncu, tür). Eğer imdb_id zaten varsa, ilgili satırı günceller."""
     if not imdb_id or imdb_id == "tt0000000":
         return
     try:
@@ -497,6 +497,7 @@ def append_seed_meta(imdb_id, title, year, meta):
                     writer = csv.writer(f)
                     writer.writerows(new_rows)
                     f.truncate()
+
         # Ensure genres is not empty; if so, set to ["Unknown"]
         genres = meta.get("genres", [])
         if not genres:
@@ -505,19 +506,53 @@ def append_seed_meta(imdb_id, title, year, meta):
         directors = meta.get("directors", [])
         if not directors and meta.get("created_by"):
             directors = meta.get("created_by", [])
-        write_header = not SEED_META_PATH.exists() or SEED_META_PATH.stat().st_size == 0
-        with SEED_META_PATH.open("a", newline="", encoding="utf-8") as f:
-            w = csv.writer(f)
-            if write_header:
-                w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
-            w.writerow([
-                imdb_id,
-                title or "",
-                str(year or ""),
-                "; ".join(directors),
-                "; ".join(meta.get("cast", [])),
-                "; ".join(genres),
-            ])
+
+        # Always use these headers
+        headers = ["imdb_id", "title", "year", "directors", "cast", "genres"]
+        rows = []
+        found = False
+        # Read all rows (if file exists)
+        if SEED_META_PATH.exists() and SEED_META_PATH.stat().st_size > 0:
+            with SEED_META_PATH.open("r", newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if (row.get("imdb_id") or "").strip() == imdb_id:
+                        # Replace with new metadata
+                        rows.append({
+                            "imdb_id": imdb_id,
+                            "title": title or "",
+                            "year": str(year or ""),
+                            "directors": "; ".join(directors),
+                            "cast": "; ".join(meta.get("cast", [])),
+                            "genres": "; ".join(genres),
+                        })
+                        found = True
+                    else:
+                        # Keep as is
+                        rows.append({
+                            "imdb_id": row.get("imdb_id", ""),
+                            "title": row.get("title", ""),
+                            "year": row.get("year", ""),
+                            "directors": row.get("directors", ""),
+                            "cast": row.get("cast", ""),
+                            "genres": row.get("genres", ""),
+                        })
+        if not found:
+            # Append new row
+            rows.append({
+                "imdb_id": imdb_id,
+                "title": title or "",
+                "year": str(year or ""),
+                "directors": "; ".join(directors),
+                "cast": "; ".join(meta.get("cast", [])),
+                "genres": "; ".join(genres),
+            })
+        # Write back all rows with headers
+        with SEED_META_PATH.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
     except Exception as e:
         print("append_seed_meta error:", e)
 # --- /seed okuma fonksiyonu ---
