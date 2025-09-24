@@ -1289,6 +1289,23 @@ def show_favorites(fav_type, label):
                 st.success(f"✅ {title} IMDb & RT yenilendi. (IMDb={imdb_rating}, RT={rt_score}%)")
                 st.rerun()
             # --- /Refresh Button ---
+            # --- Full Metadata Button ---
+            if st.button("🎬 Full Meta", key=f"fullmeta_{fav['id']}"):
+                imdb_id = (fav.get("imdb") or "").strip()
+                title = fav.get("title")
+                year = fav.get("year")
+                is_series = (fav.get("type") == "show")
+
+                new_meta = fetch_metadata(imdb_id, title, year, is_series=is_series)
+                if new_meta:
+                    db.collection("favorites").document(fav["id"]).update({
+                        "directors": new_meta.get("directors", []),
+                        "cast": new_meta.get("cast", []),
+                        "genres": new_meta.get("genres", []),
+                    })
+                    append_seed_meta(imdb_id, title, year, new_meta)
+                    st.success(f"✅ Metadata updated for {title} ({year})")
+                    st.rerun()
         with cols[2]:
             if st.button("❌", key=f"remove_{fav['id']}"):
                 db.collection("favorites").document(fav["id"]).delete()
