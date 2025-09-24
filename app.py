@@ -98,7 +98,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
     except Exception as e:
         print("fetch_metadata OMDb error:", e)
 
-    # 2) TMDB fallback
+    # 2) TMDB fallback (geliştirilmiş)
     try:
         tmdb_key = os.getenv("TMDB_API_KEY")
         if tmdb_key and imdb_id:
@@ -111,33 +111,32 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False):
                 if results:
                     tmdb_id = results[0].get("id")
                     search_type = "movie" if j.get("movie_results") else "tv"
-                    credits_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits"
-                    cred = requests.get(credits_url, params={"api_key": tmdb_key}, timeout=12)
-                    if cred.status_code == 200:
-                        cj = cred.json()
-                        directors = [c.get("name") for c in cj.get("crew", []) if c.get("job") == "Director"]
-                        cast = [c.get("name") for c in (cj.get("cast") or [])][:8]
-                        genres = []
-                        if isinstance(results[0].get("genres"), list):
-                            genres = [g.get("name") for g in results[0].get("genres", []) if g.get("name")]
-                        # --- TV Show creators fallback ---
-                        if search_type == "tv":
-                            creators = [c.get("name") for c in results[0].get("created_by", []) if c.get("name")]
-                            if creators and not directors:
-                                directors = creators
-                        # Safeguard: For TV, if still no directors, set to ["Unknown"]
+                    # 🔑 detayları credits ile birlikte al
+                    details_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}"
+                    d_resp = requests.get(details_url, params={"api_key": tmdb_key, "append_to_response": "credits"}, timeout=12)
+                    if d_resp.status_code == 200:
+                        det = d_resp.json()
+                        # Genres
+                        genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
+                        # Directors
+                        directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director"]
+                        # Cast (ilk 8 kişi)
+                        cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
+                        # TV shows → created_by fallback
                         if search_type == "tv" and not directors:
+                            directors = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
+                        if not directors:
                             directors = ["Unknown"]
-                        # --- /TV Show creators fallback ---
-                        if directors or cast or genres:
-                            return {"directors": directors, "cast": cast, "genres": genres}
+                        if not genres:
+                            genres = ["Unknown"]
+                        return {"directors": directors, "cast": cast, "genres": genres}
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
     # If both OMDb and TMDB fail, return genres = ["Unknown"] and directors = ["Unknown"]
     return {"directors": ["Unknown"], "cast": [], "genres": ["Unknown"]}
 
-def backfill_metadata():
+def backfill_metadata(limit=20):
     db = get_firestore()
     # toplamı göstermek için önce topla
     all_docs = []
@@ -153,7 +152,7 @@ def backfill_metadata():
     updated = 0
     not_updated = []
 
-    for idx, (type_name, collection, doc) in enumerate(all_docs, start=1):
+    for idx, (type_name, collection, doc) in enumerate(all_docs[:limit], start=1):
         item = doc.to_dict()
         imdb_id = (item.get("imdb") or "").strip()
         title = item.get("title")
@@ -904,8 +903,9 @@ if st.button("📊 Favori Sayılarını Göster"):
     show_favorites_count()
 
 # --- Metadata Backfill Button ---
+limit_val = st.number_input("Kaç kayıt işlenecek?", min_value=10, max_value=500, value=20, step=10)
 if st.button("🔁 Metadata Backfill"):
-    backfill_metadata()
+    backfill_metadata(limit=limit_val)
 
 show_posters = st.session_state["show_posters"]
 media_type = st.radio("Search type:", ["Movie", "TV Show", "Actor/Actress"], horizontal=True)
