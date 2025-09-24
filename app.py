@@ -121,8 +121,8 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # TV shows → created_by fallback
-                        if search_type == "tv" and not directors:
+                        # --- TV shows: use created_by if directors is empty or ["Unknown"]
+                        if search_type == "tv" and (not directors or directors == ["Unknown"]):
                             directors = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
                         if not directors:
                             directors = ["Unknown"]
@@ -1275,9 +1275,10 @@ def show_favorites(fav_type, label):
                 ]
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
-            # Directors
+            # Directors / Created by (label differs for shows)
             if fav.get("directors"):
-                link_list(fav["directors"], "director", "🎬", "Directors")
+                label = "Created by" if fav.get("type") == "show" else "Directors"
+                link_list(fav["directors"], "director", "🎬", label)
             # Cast
             if fav.get("cast"):
                 link_list(fav["cast"], "actor", "🎭", "Cast")
