@@ -122,13 +122,19 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
                         # --- TV shows: use created_by if directors is empty or ["Unknown"]
-                        if search_type == "tv" and (not directors or directors == ["Unknown"]):
-                            directors = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
+                        created_by = []
+                        if search_type == "tv":
+                            created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
+                            if not directors or directors == ["Unknown"]:
+                                # For TV, if directors missing, leave directors empty and use created_by field
+                                directors = []
                         if not directors:
-                            directors = ["Unknown"]
+                            directors = ["Unknown"] if search_type == "movie" else []
                         if not genres:
                             genres = ["Unknown"]
                         tmdb_result = {"directors": directors, "cast": cast, "genres": genres}
+                        if search_type == "tv":
+                            tmdb_result["created_by"] = created_by
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
@@ -152,6 +158,9 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
+        # For TV shows, propagate created_by if present
+        if "created_by" in meta:
+            result["created_by"] = meta["created_by"]
         return result
     else:
         return meta
@@ -1108,7 +1117,7 @@ if query:
                     st.code(_json.dumps(raw_title, ensure_ascii=False, indent=2))
 
                 # 3) Firestore'a yaz
-                db.collection("favorites").document(item["id"]).set({
+                doc_data = {
                     "id": item["id"],
                     "title": item["title"],
                     "year": item.get("year"),
@@ -1121,7 +1130,11 @@ if query:
                     "directors": new_meta.get("directors", []) if new_meta else [],
                     "cast": new_meta.get("cast", []) if new_meta else [],
                     "genres": new_meta.get("genres", []) if new_meta else [],
-                })
+                }
+                # For TV shows, add created_by field if present
+                if media_key == "show" and new_meta and "created_by" in new_meta:
+                    doc_data["created_by"] = new_meta["created_by"]
+                db.collection("favorites").document(item["id"]).set(doc_data)
                 # 4) seed_ratings.csv'ye (yoksa) ekle
                 append_seed_rating(
                     imdb_id=imdb_id,
@@ -1233,9 +1246,6 @@ def show_favorites(fav_type, label):
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
-        # Handle TV show creators as directors if directors missing
-        if fav.get("type") == "show" and not fav.get("directors") and fav.get("created_by"):
-            fav["directors"] = fav.get("created_by", [])
         imdb_val = fav.get("imdbRating")
         if imdb_val in (None, "", "N/A") or (isinstance(imdb_val, (int, float)) and float(imdb_val) == 0.0):
             imdb_display = "N/A"
@@ -1276,9 +1286,10 @@ def show_favorites(fav_type, label):
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
             # Directors / Created by (label differs for shows)
-            if fav.get("directors"):
-                label = "Created by" if fav.get("type") == "show" else "Directors"
-                link_list(fav["directors"], "director", "🎬", label)
+            if fav.get("type") == "show" and fav.get("created_by"):
+                link_list(fav.get("created_by", []), "director", "🎬", "Created by")
+            elif fav.get("directors"):
+                link_list(fav["directors"], "director", "🎬", "Directors")
             # Cast
             if fav.get("cast"):
                 link_list(fav["cast"], "actor", "🎭", "Cast")
@@ -1358,11 +1369,17 @@ def show_favorites(fav_type, label):
 
                     new_meta = fetch_metadata(imdb_id, title, year, is_series=is_series)
                     if new_meta:
-                        db.collection("favorites").document(fav["id"]).update({
+                        update_data = {
                             "directors": new_meta.get("directors", []),
                             "cast": new_meta.get("cast", []),
                             "genres": new_meta.get("genres", []),
-                        })
+                        }
+                        # For TV shows, add or update created_by field
+                        if is_series and "created_by" in new_meta:
+                            update_data["created_by"] = new_meta["created_by"]
+                        elif is_series:
+                            update_data["created_by"] = []
+                        db.collection("favorites").document(fav["id"]).update(update_data)
                         append_seed_meta(imdb_id, title, year, new_meta)
                         st.success(f"✅ Metadata updated for {title} ({year})")
                         st.rerun()
