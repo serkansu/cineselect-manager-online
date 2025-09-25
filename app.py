@@ -191,32 +191,39 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
 
     # --- Unified merge logic for directors, writers, cast, genres ---
     def merge_field(omdb_val, tmdb_val):
-        # Normalize inputs into lists
+        """
+        Merge fields from OMDb and TMDb with rules:
+        - Ignore invalid values: None, empty string/list, "N/A", "Unknown", "None"
+        - OMDb has priority if valid
+        - If both OMDb and TMDb provide values, merge them and remove duplicates
+        """
         def normalize(val):
             if not val:
                 return []
             if isinstance(val, str):
-                if val.strip().lower() in ["n/a", "unknown", "none"]:
-                    return []
-                return [v.strip() for v in val.split(",") if v.strip()]
-            if isinstance(val, list):
-                result = []
+                parts = [p.strip() for p in val.split(",") if p and p.strip().lower() not in ["n/a", "unknown", "none"]]
+                return parts
+            elif isinstance(val, list):
+                cleaned = []
                 for v in val:
+                    if isinstance(v, dict) and "name" in v:
+                        v = v["name"]
                     if isinstance(v, str) and v.strip().lower() not in ["n/a", "unknown", "none"]:
-                        result.append(v.strip())
-                return result
+                        cleaned.append(v.strip())
+                return cleaned
             return []
+
         omdb_list = normalize(omdb_val)
         tmdb_list = normalize(tmdb_val)
+
+        if omdb_list and not tmdb_list:
+            return omdb_list
+        if tmdb_list and not omdb_list:
+            return tmdb_list
         if omdb_list and tmdb_list:
             merged = omdb_list + [x for x in tmdb_list if x not in omdb_list]
             return merged
-        elif omdb_list:
-            return omdb_list
-        elif tmdb_list:
-            return tmdb_list
-        else:
-            return []
+        return []
 
     # OMDb/TMDb raw data
     omdb_data = None
