@@ -289,25 +289,32 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         result = {}
         for field in ("directors", "cast", "genres", "writers"):
             existing_val = existing.get(field)
+            # For directors and genres: treat as empty only if missing, [], or all elements are "N/A"/"Unknown"
             if field in ("directors", "genres"):
                 is_empty = (
                     not existing_val
                     or (isinstance(existing_val, list) and (
                         len(existing_val) == 0
-                        or existing_val == ["Unknown"]
-                        or existing_val == ["N/A"]
+                        or all(
+                            (str(x or "").strip().lower() in ("n/a", "unknown"))
+                            for x in existing_val
+                        )
                     ))
                 )
                 if is_empty:
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
+            # For cast and writers: treat as empty only if missing, [], or all elements are "N/A"
             elif field in ("cast", "writers"):
                 is_empty = (
                     not existing_val
                     or (isinstance(existing_val, list) and (
                         len(existing_val) == 0
-                        or any((x or "").strip().upper() == "N/A" for x in existing_val)
+                        or all(
+                            (str(x or "").strip().lower() == "n/a")
+                            for x in existing_val
+                        )
                     ))
                 )
                 if is_empty:
