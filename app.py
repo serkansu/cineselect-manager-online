@@ -234,7 +234,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         meta["directors"] = [c["name"] for c in tmdb_data["crew"] if c.get("job") == "Director"]
 
     # Cast (merge OMDb + TMDb)
-    tmdb_cast = [c["name"] for c in tmdb_data.get("cast", [])]
+    tmdb_cast = tmdb_data.get("cast", [])  # already a list of strings
     omdb_cast = []
     if omdb_data and omdb_data.get("Actors") and omdb_data["Actors"] != "N/A":
         omdb_cast = [a.strip() for a in omdb_data["Actors"].split(",")]
