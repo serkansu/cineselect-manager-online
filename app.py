@@ -122,16 +122,17 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         det = d_resp.json()
                         # Genres
                         genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
-                        # Directors
-                        directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        created_by = []
-                        # For TV shows, always set created_by from det["created_by"]
+                        # For TV shows, always set created_by from det["created_by"], and directors=[]
                         if search_type in ["tv", "show"]:
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
-                        if not directors:
-                            directors = ["Unknown"]
+                            directors = []
+                        else:
+                            created_by = []
+                            directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
+                            if not directors:
+                                directors = ["Unknown"]
                         if not genres:
                             genres = ["Unknown"]
                         tmdb_result = {
@@ -1306,6 +1307,11 @@ def get_sort_key(fav):
         return 0
 
 def show_favorites(fav_type, label):
+    # --- Ensure session_state filter keys are cleared if widget selections are empty ---
+    clear_filter_if_empty("filter_director")
+    clear_filter_if_empty("filter_actor")
+    clear_filter_if_empty("filter_genre")
+    clear_filter_if_empty("filter_created_by")
     # --- Unified filtering logic: apply filters across movies and shows together if any filter is active ---
     # Gather all favorites if any filter is active, else only per section.
     fd = st.session_state.get("filter_director")
@@ -1391,15 +1397,15 @@ def show_favorites(fav_type, label):
                 ]
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
-            # Directors / Created by (label differs for shows)
+            # Directors + Created by (for shows, show both if available)
             if fav.get("type") == "show":
-                # Always prefer created_by if present and non-empty
-                if fav.get("created_by") and len(fav.get("created_by", [])) > 0:
+                if fav.get("created_by"):
                     link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
-                elif fav.get("directors") and len(fav.get("directors", [])) > 0:
+                if fav.get("directors"):
                     link_list(fav.get("directors", []), "director", "🎬", "Directors")
-            elif fav.get("directors") and len(fav.get("directors", [])) > 0:
-                link_list(fav.get("directors", []), "director", "🎬", "Directors")
+            else:
+                if fav.get("directors"):
+                    link_list(fav.get("directors", []), "director", "🎬", "Directors")
             # Cast
             if fav.get("cast"):
                 link_list(fav["cast"], "actor", "🎭", "Cast")
