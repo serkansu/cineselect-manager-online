@@ -219,33 +219,27 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     # TMDb result (dict)
     tmdb_data = tmdb_result if tmdb_result else {}
 
-    # Directors: OMDb first, fallback to TMDb
-    directors = []
-    if omdb_data and omdb_data.get("Director") and omdb_data["Director"] not in [None, "", "N/A"]:
-        directors = [d.strip() for d in omdb_data["Director"].split(",")]
-    elif tmdb_data.get("directors"):
-        directors = tmdb_data["directors"]
-    else:
-        directors = []
+    # Writers
+    omdb_writer = omdb_data.get("Writer") if omdb_data else None
+    if omdb_writer and omdb_writer != "N/A":
+        meta["writers"] = [w.strip() for w in omdb_writer.split(",")]
+    elif not meta.get("writers") and tmdb_data.get("created_by"):
+        meta["writers"] = [c["name"] for c in tmdb_data["created_by"]]
 
-    # Writers: OMDb first, fallback to TMDb writers, then TMDb created_by
-    writers = []
-    if omdb_data and omdb_data.get("Writer") and omdb_data["Writer"] not in [None, "", "N/A"]:
-        writers = [w.strip() for w in omdb_data["Writer"].split(",")]
-    elif tmdb_data.get("writers"):
-        writers = tmdb_data["writers"]
-    elif tmdb_data.get("created_by"):
-        writers = tmdb_data["created_by"]
-    else:
-        writers = []
+    # Directors
+    omdb_director = omdb_data.get("Director") if omdb_data else None
+    if omdb_director and omdb_director != "N/A":
+        meta["directors"] = [d.strip() for d in omdb_director.split(",")]
+    elif not meta.get("directors") and "crew" in tmdb_data:
+        meta["directors"] = [c["name"] for c in tmdb_data["crew"] if c.get("job") == "Director"]
 
-    # Cast
-    if omdb_result and omdb_result.get("cast"):
-        meta["cast"] = omdb_result["cast"]
-    elif tmdb_result and tmdb_result.get("cast"):
-        meta["cast"] = tmdb_result["cast"]
-    else:
-        meta["cast"] = []
+    # Cast (merge OMDb + TMDb)
+    tmdb_cast = [c["name"] for c in tmdb_data.get("cast", [])]
+    omdb_cast = []
+    if omdb_data and omdb_data.get("Actors") and omdb_data["Actors"] != "N/A":
+        omdb_cast = [a.strip() for a in omdb_data["Actors"].split(",")]
+    combined_cast = list(dict.fromkeys(tmdb_cast + omdb_cast))[:10]  # merge, deduplicate, limit
+    meta["cast"] = combined_cast
 
     # Genres
     if omdb_result and omdb_result.get("genres"):
@@ -254,10 +248,6 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         meta["genres"] = tmdb_result["genres"]
     else:
         meta["genres"] = ["Unknown"]
-
-    # Set directors and writers in meta dict
-    meta["directors"] = directors
-    meta["writers"] = writers
 
     # Debug log
     if omdb_result and omdb_result.get("debug_log"):
