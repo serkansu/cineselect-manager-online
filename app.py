@@ -1285,13 +1285,8 @@ elif media_type == "TV Show":
 else:
     source_docs = []
 writers = sorted({w for doc in source_docs for w in (doc.to_dict().get("writers") or [])})
-# For created_by: only for TV Show
-created_by_list = []
-if media_type == "TV Show":
-    source_docs = db.collection("favorites").where("type", "==", "show").stream()
-    created_by_list = sorted({cb for doc in source_docs for cb in (doc.to_dict().get("created_by") or [])})
-
 ## --- Unified filter row (stateless, no query_params) ---
+# Remove "Filter by Created by" entirely; update order: Director, Writer, Actor, Genre
 if media_type == "TV Show":
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -1314,7 +1309,7 @@ if media_type == "TV Show":
             "🎞 Filter by Genre", genres,
             default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
         )
-else:
+elif media_type == "Movie":
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         selected_directors = st.multiselect(
@@ -1322,19 +1317,19 @@ else:
             default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
         )
     with col2:
+        selected_writers = st.multiselect(
+            "✍️ Filter by Writer", writers,
+            default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
+        )
+    with col3:
         selected_actors = st.multiselect(
             "🎭 Filter by Actor", actors,
             default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
         )
-    with col3:
+    with col4:
         selected_genres = st.multiselect(
             "🎞 Filter by Genre", genres,
             default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
-        )
-    with col4:
-        selected_writers = st.multiselect(
-            "✍️ Filter by Writer", writers,
-            default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
         )
 def get_sort_key(fav):
     try:
