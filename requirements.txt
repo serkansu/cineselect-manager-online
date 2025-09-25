@@ -3,3 +3,5 @@ requests
 firebase-admin
 google-cloud-firestore
 python-dotenv
+beautifulsoup4
+lxml
