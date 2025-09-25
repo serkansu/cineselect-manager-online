@@ -124,10 +124,19 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # For TV shows, always set created_by from det["created_by"], and directors=[]
+                        # For TV shows, always set created_by from det["created_by"], and merge with all directors from crew
                         if search_type in ["tv", "show"]:
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
-                            directors = []
+                            all_directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
+                            # Merge created_by and directors, preserving order and removing duplicates
+                            merged_creators = []
+                            seen = set()
+                            for name in created_by + all_directors:
+                                if name and name not in seen:
+                                    merged_creators.append(name)
+                                    seen.add(name)
+                            created_by = merged_creators
+                            directors = merged_creators  # for backward compatibility if needed
                         else:
                             created_by = []
                             directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
@@ -1308,6 +1317,16 @@ def get_sort_key(fav):
 
 def show_favorites(fav_type, label):
     # --- Ensure session_state filter keys are cleared if widget selections are empty ---
+    # EXPLICIT resets: if any selected_x is empty, reset session_state and reload all
+    global selected_directors, selected_actors, selected_genres, selected_created_by
+    if "selected_directors" in globals() and not selected_directors:
+        st.session_state["filter_director"] = None
+    if "selected_actors" in globals() and not selected_actors:
+        st.session_state["filter_actor"] = None
+    if "selected_genres" in globals() and not selected_genres:
+        st.session_state["filter_genre"] = None
+    if fav_type == "show" and "selected_created_by" in globals() and not selected_created_by:
+        st.session_state["filter_created_by"] = None
     clear_filter_if_empty("filter_director")
     clear_filter_if_empty("filter_actor")
     clear_filter_if_empty("filter_genre")
@@ -1320,7 +1339,9 @@ def show_favorites(fav_type, label):
     fcb = st.session_state.get("filter_created_by")
     # Combine all selected filters (from multiselects and single-click)
     any_filter_active = (
-        selected_directors or selected_actors or selected_genres or
+        (selected_directors if "selected_directors" in globals() else []) or
+        (selected_actors if "selected_actors" in globals() else []) or
+        (selected_genres if "selected_genres" in globals() else []) or
         (fav_type == "show" and "selected_created_by" in globals() and selected_created_by) or
         fd or fa or fg or (fav_type == "show" and fcb)
     )
@@ -1331,14 +1352,14 @@ def show_favorites(fav_type, label):
         # Apply filters
         filtered = all_favs
         # Multiselects
-        if selected_directors:
+        if "selected_directors" in globals() and selected_directors:
             filtered = [f for f in filtered if any(d in (f.get("directors") or []) for d in selected_directors)]
-        if selected_actors:
+        if "selected_actors" in globals() and selected_actors:
             filtered = [f for f in filtered if any(a in (f.get("cast") or []) for a in selected_actors)]
-        if selected_genres:
+        if "selected_genres" in globals() and selected_genres:
             filtered = [f for f in filtered if any(g in (f.get("genres", []) or []) for g in selected_genres)]
         # created_by only for shows
-        if "selected_created_by" in globals() and selected_created_by:
+        if fav_type == "show" and "selected_created_by" in globals() and selected_created_by:
             filtered = [f for f in filtered if any(cb in (f.get("created_by") or []) for cb in selected_created_by)]
         # Single-click session_state filters
         if fd:
@@ -1347,7 +1368,7 @@ def show_favorites(fav_type, label):
             filtered = [f for f in filtered if fa in f.get("cast",[])]
         if fg:
             filtered = [f for f in filtered if fg in f.get("genres",[])]
-        if fcb:
+        if fav_type == "show" and fcb:
             filtered = [f for f in filtered if fcb in (f.get("created_by") or [])]
         # Now, split back by type
         favorites = [f for f in filtered if (f.get("type", "").lower() == fav_type)]
@@ -1397,12 +1418,19 @@ def show_favorites(fav_type, label):
                 ]
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
-            # Directors + Created by (for shows, show both if available)
+            # Directors + Created by (for shows, combine both as Created by + Directors)
             if fav.get("type") == "show":
-                if fav.get("created_by"):
-                    link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
-                if fav.get("directors"):
-                    link_list(fav.get("directors", []), "director", "🎬", "Directors")
+                # Merge created_by and directors for display, preserving unique order
+                cb = fav.get("created_by", []) or []
+                dirs = fav.get("directors", []) or []
+                merged = []
+                seen = set()
+                for name in cb + dirs:
+                    if name and name not in seen:
+                        merged.append(name)
+                        seen.add(name)
+                if merged:
+                    link_list(merged, "created_by", "🎬", "Created by + Directors")
             else:
                 if fav.get("directors"):
                     link_list(fav.get("directors", []), "director", "🎬", "Directors")
