@@ -235,6 +235,17 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     meta["writers"] = [w.strip() for w in omdb_data["Writer"].split(",")]
         except Exception:
             pass
+        # Fallback to OMDb if TMDB did not provide data
+        try:
+            if 'omdb_data' in locals():
+                if not meta.get("cast") and omdb_data.get("Actors"):
+                    meta["cast"] = [a.strip() for a in omdb_data["Actors"].split(",") if a.strip()]
+                if not meta.get("genres") and omdb_data.get("Genre"):
+                    meta["genres"] = [g.strip() for g in omdb_data["Genre"].split(",") if g.strip()]
+                if not meta.get("writers") and omdb_data.get("Writer"):
+                    meta["writers"] = [w.strip() for w in omdb_data["Writer"].split(",") if w.strip()]
+        except Exception:
+            pass
         # Remove created_by if present (writers is canonical)
         meta.pop("created_by", None)
         # If debug_log missing (e.g. OMDb result), add fallback debug_log
