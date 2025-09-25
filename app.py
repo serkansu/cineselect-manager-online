@@ -219,19 +219,32 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     # TMDb result (dict)
     tmdb_data = tmdb_result if tmdb_result else {}
 
-    # Writers
+    # Writers (merge OMDb and TMDb, dedup, preserve order)
     omdb_writer = omdb_data.get("Writer") if omdb_data else None
+    tmdb_writers = tmdb_data.get("writers", [])
+    # OMDb writers
+    omdb_writers = []
     if omdb_writer and omdb_writer != "N/A":
-        meta["writers"] = [w.strip() for w in omdb_writer.split(",")]
-    elif not meta.get("writers") and tmdb_data.get("created_by"):
-        meta["writers"] = [c["name"] for c in tmdb_data["created_by"]]
+        omdb_writers = [w.strip() for w in omdb_writer.split(",") if w.strip() and w.strip() != "N/A"]
+    # Merge OMDb + TMDb writers (preserve OMDb order, then TMDb, dedup)
+    writers_merged = list(dict.fromkeys(omdb_writers + tmdb_writers))
+    # If still empty, try created_by from TMDb (for TV shows)
+    if not writers_merged and tmdb_data.get("created_by"):
+        writers_merged = [c["name"] for c in tmdb_data["created_by"] if c.get("name")]
+    meta["writers"] = writers_merged
 
-    # Directors
+    # Directors (merge OMDb and TMDb, dedup, preserve order)
     omdb_director = omdb_data.get("Director") if omdb_data else None
+    tmdb_directors = tmdb_data.get("directors", [])
+    omdb_directors = []
     if omdb_director and omdb_director != "N/A":
-        meta["directors"] = [d.strip() for d in omdb_director.split(",")]
-    elif not meta.get("directors") and "crew" in tmdb_data:
-        meta["directors"] = [c["name"] for c in tmdb_data["crew"] if c.get("job") == "Director"]
+        omdb_directors = [d.strip() for d in omdb_director.split(",") if d.strip() and d.strip() != "N/A"]
+    # Merge OMDb + TMDb directors (preserve OMDb order, then TMDb, dedup)
+    directors_merged = list(dict.fromkeys(omdb_directors + tmdb_directors))
+    # If still empty, try "crew" for directors in TMDb
+    if not directors_merged and "crew" in tmdb_data:
+        directors_merged = [c["name"] for c in tmdb_data["crew"] if c.get("job") == "Director" and c.get("name")]
+    meta["directors"] = directors_merged
 
     # Cast (merge OMDb + TMDb)
     tmdb_cast = tmdb_data.get("cast", [])  # already a list of strings
@@ -263,19 +276,30 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         result = {}
         for field in ("directors", "cast", "genres", "writers"):
             existing_val = existing.get(field)
-            # Treat empty list, None, or ["Unknown"] as empty for directors/genres
+            # For directors/genres: treat None, empty, ["Unknown"], ["N/A"] as empty
             if field in ("directors", "genres"):
-                if not existing_val or (isinstance(existing_val, list) and (len(existing_val) == 0 or existing_val == ["Unknown"])):
+                is_empty = (
+                    not existing_val
+                    or (isinstance(existing_val, list) and (
+                        len(existing_val) == 0
+                        or existing_val == ["Unknown"]
+                        or existing_val == ["N/A"]
+                    ))
+                )
+                if is_empty:
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
-            elif field == "cast":
-                if not existing_val or (isinstance(existing_val, list) and len(existing_val) == 0):
-                    result[field] = meta.get(field, [])
-                else:
-                    result[field] = existing_val
-            elif field == "writers":
-                if not existing_val or (isinstance(existing_val, list) and len(existing_val) == 0):
+            # For cast/writers: treat None, empty, or any "N/A" present as empty
+            elif field in ("cast", "writers"):
+                is_empty = (
+                    not existing_val
+                    or (isinstance(existing_val, list) and (
+                        len(existing_val) == 0
+                        or any((x or "").strip().upper() == "N/A" for x in existing_val)
+                    ))
+                )
+                if is_empty:
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
