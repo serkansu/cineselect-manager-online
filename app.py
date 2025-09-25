@@ -1,6 +1,7 @@
 def clear_filter_if_empty(key):
     """Resets the filter session state key to None if the associated widget selection is empty.
-    Also clears the query param for that filter and triggers rerun if actually cleared."""
+    Also clears the query param for that filter and triggers rerun if actually cleared.
+    Additionally, if no filter is active after clearing, resets all query params and reruns to show the full list."""
     val = st.session_state.get(key)
     if not val:
         was_set = st.session_state.get(key, None) is not None
@@ -14,6 +15,15 @@ def clear_filter_if_empty(key):
                 rerun_needed = True
         # Only rerun if the key was set and got cleared, to avoid infinite loops
         if was_set or rerun_needed:
+            st.rerun()
+        # After rerun, if no filter is active, clear all query params and rerun again to fully reset
+        if not any([
+            st.session_state.get("filter_director"),
+            st.session_state.get("filter_actor"),
+            st.session_state.get("filter_genre"),
+            st.session_state.get("filter_created_by")
+        ]):
+            st.query_params.clear()
             st.rerun()
 import streamlit as st
 from bs4 import BeautifulSoup
