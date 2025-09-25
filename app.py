@@ -208,13 +208,36 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     # --- Merge priority: OMDb first, but skip N/A/empty values and fallback to TMDB ---
     meta = {}
 
-    # Directors
-    if omdb_result and omdb_result.get("directors"):
-        meta["directors"] = omdb_result["directors"]
-    elif tmdb_result and tmdb_result.get("directors"):
-        meta["directors"] = tmdb_result["directors"]
+    # OMDb raw data, if available
+    omdb_data = None
+    if 'omdb_data' in locals():
+        omdb_data = locals().get('omdb_data')
+    elif 'd' in locals():
+        omdb_data = locals().get('d')
+    # But actually, above OMDb fetch block sets omdb_data = d if OMDb found.
+
+    # TMDb result (dict)
+    tmdb_data = tmdb_result if tmdb_result else {}
+
+    # Directors: OMDb first, fallback to TMDb
+    directors = []
+    if omdb_data and omdb_data.get("Director") and omdb_data["Director"] not in [None, "", "N/A"]:
+        directors = [d.strip() for d in omdb_data["Director"].split(",")]
+    elif tmdb_data.get("directors"):
+        directors = tmdb_data["directors"]
     else:
-        meta["directors"] = []
+        directors = []
+
+    # Writers: OMDb first, fallback to TMDb writers, then TMDb created_by
+    writers = []
+    if omdb_data and omdb_data.get("Writer") and omdb_data["Writer"] not in [None, "", "N/A"]:
+        writers = [w.strip() for w in omdb_data["Writer"].split(",")]
+    elif tmdb_data.get("writers"):
+        writers = tmdb_data["writers"]
+    elif tmdb_data.get("created_by"):
+        writers = tmdb_data["created_by"]
+    else:
+        writers = []
 
     # Cast
     if omdb_result and omdb_result.get("cast"):
@@ -232,13 +255,9 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     else:
         meta["genres"] = ["Unknown"]
 
-    # Writers
-    if omdb_result and omdb_result.get("writers"):
-        meta["writers"] = omdb_result["writers"]
-    elif tmdb_result and tmdb_result.get("writers"):
-        meta["writers"] = tmdb_result["writers"]
-    else:
-        meta["writers"] = []
+    # Set directors and writers in meta dict
+    meta["directors"] = directors
+    meta["writers"] = writers
 
     # Debug log
     if omdb_result and omdb_result.get("debug_log"):
