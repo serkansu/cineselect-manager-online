@@ -228,10 +228,17 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         omdb_data.get("Director") if omdb_data else None,
         tmdb_data.get("directors"),
     )
-    # Writers (try created_by as fallback)
+    # Writers (normalize created_by to names if present)
+    created_by_names = []
+    cb_raw = tmdb_data.get("created_by")
+    if isinstance(cb_raw, list):
+        created_by_names = [c["name"] for c in cb_raw if isinstance(c, dict) and c.get("name")]
+
+    writers_val = created_by_names or tmdb_data.get("writers")
+
     meta["writers"] = merge_field(
         omdb_data.get("Writer") if omdb_data else None,
-        tmdb_data.get("created_by") or tmdb_data.get("writers"),
+        writers_val,
     )
     # Cast (TMDb: must be list of dicts with "name")
     tmdb_cast = [c["name"] for c in tmdb_data.get("cast", []) if isinstance(c, dict) and "name" in c]
