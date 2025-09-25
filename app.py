@@ -123,20 +123,29 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         creators = []
                         if search_type == "tv":
                             creators = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
-                        # Merge directors and creators, and track origin for debug_log
+                        # Always merge creators into directors for TV shows
                         orig_directors = list(directors)  # directors from crew
                         orig_creators = list(creators)    # creators from created_by
-                        directors = list({d for d in directors + creators if d})
+                        if search_type == "tv":
+                            directors = list({d for d in directors + creators if d})
+                        else:
+                            directors = list({d for d in directors if d})
                         # --- DEBUG LOGGING for directors/creators ---
                         debug_log = ""
-                        if orig_directors and orig_creators:
-                            debug_log = f"Directors from TMDB crew + Creators from TMDB created_by ({', '.join(orig_creators)})"
-                        elif orig_directors and not orig_creators:
-                            debug_log = "Directors found in TMDB crew"
-                        elif orig_creators and not orig_directors:
-                            debug_log = f"Creators only from TMDB created_by ({', '.join(orig_creators)})"
+                        if search_type == "tv":
+                            if orig_directors and orig_creators:
+                                debug_log = f"Directors from TMDB crew + Creators from TMDB created_by ({', '.join(orig_creators)})"
+                            elif orig_directors and not orig_creators:
+                                debug_log = "Directors found in TMDB crew"
+                            elif orig_creators and not orig_directors:
+                                debug_log = f"Creators only from TMDB created_by ({', '.join(orig_creators)})"
+                            else:
+                                debug_log = "No directors/creators found in TMDB"
                         else:
-                            debug_log = "No directors/creators found in TMDB"
+                            if orig_directors:
+                                debug_log = "Directors found in TMDB crew"
+                            else:
+                                debug_log = "No directors found in TMDB"
                         # Insert debug_log as a key in the result
                         if not directors:
                             directors = ["Unknown"]
@@ -196,7 +205,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         # Also copy debug_log if present in meta
         if "debug_log" in meta:
             result["debug_log"] = meta["debug_log"]
-        # Do not include created_by in the result
+        # created_by is no longer returned or handled
         return result
     else:
         return meta
@@ -263,9 +272,6 @@ def backfill_metadata(limit=20):
                     "cast":      meta.get("cast", []),
                     "genres":    meta.get("genres", []),
                 }
-                if type_name == "show":
-                    # fetch_metadata TV için 'created_by' döndürürse yaz
-                    update_data["created_by"] = meta.get("created_by", [])
                 db.collection(collection).document(item["id"]).update(update_data)
                 append_seed_meta(imdb_id, title, year, meta)   # ✅ CSV’ye de yaz
                 updated += 1
@@ -554,17 +560,16 @@ def overwrite_seed_meta(docs):
     try:
         with SEED_META_PATH.open("w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
-            w.writerow(["imdb_id", "title", "year", "directors", "created_by", "cast", "genres"])
+            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
             for doc in docs:
                 item = doc.to_dict()
                 imdb_id = item.get("imdb", "")
                 title = item.get("title", "")
                 year = item.get("year", "")
                 directors   = "; ".join(item.get("directors", []))
-                created_by  = "; ".join(item.get("created_by", []))
                 cast        = "; ".join(item.get("cast", []))
                 genres      = "; ".join(item.get("genres", []))
-                w.writerow([imdb_id, title, year, directors, created_by, cast, genres])
+                w.writerow([imdb_id, title, year, directors, cast, genres])
     except Exception as e:
         print("overwrite_seed_meta error:", e)
 
@@ -585,13 +590,12 @@ def append_seed_meta(imdb_id, title, year, meta):
     with SEED_META_PATH.open("a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if write_header:
-            w.writerow(["imdb_id", "title", "year", "directors", "created_by", "cast", "genres"])
+            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
         w.writerow([
             imdb_id,
             title,
             str(year or ""),
             "; ".join(meta.get("directors", [])),
-            "; ".join(meta.get("created_by", [])) if "created_by" in meta else "",
             "; ".join(meta.get("cast", [])),
             "; ".join(meta.get("genres", [])),
         ])
@@ -1363,13 +1367,8 @@ def show_favorites(fav_type, label):
                 ]
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
-            # Directors / Created by (label differs for shows)
-            if fav.get("type") == "show":
-                if fav.get("created_by"):
-                    link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
-                elif fav.get("directors"):
-                    link_list(fav["directors"], "director", "🎬", "Directors")
-            elif fav.get("directors"):
+            # Directors (for both movies and shows, creators merged in directors for TV)
+            if fav.get("directors"):
                 link_list(fav["directors"], "director", "🎬", "Directors")
             # Cast
             if fav.get("cast"):
@@ -1458,11 +1457,6 @@ def show_favorites(fav_type, label):
                             "cast": new_meta.get("cast", []),
                             "genres": new_meta.get("genres", []),
                         }
-                        # For TV shows, add or update created_by field
-                        if is_series and "created_by" in new_meta:
-                            update_data["created_by"] = new_meta["created_by"]
-                        elif is_series:
-                            update_data["created_by"] = []
                         db.collection("favorites").document(fav["id"]).update(update_data)
                         append_seed_meta(imdb_id, title, year, new_meta)
                         # Show debug log if available
