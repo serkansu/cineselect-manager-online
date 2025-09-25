@@ -81,6 +81,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     # Fetch metadata as usual
     omdb_result = None
     tmdb_result = None
+    omdb_genres = []
     # 1) OMDb
     try:
         omdb_key = os.getenv("OMDB_API_KEY")
@@ -94,6 +95,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     cast = [x.strip() for x in (d.get("Actors") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     writers = [x.strip() for x in (d.get("Writer") or "").split(",") if x.strip() and x.strip() != "N/A"]
+                    omdb_genres = genres
                     if directors or cast or genres or writers:
                         omdb_result = {
                             "directors": directors,
@@ -145,20 +147,15 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                                     debug_extra = "created_by field present but empty"
                             else:
                                 debug_extra = "created_by field missing from TMDB response"
-                        # Always merge creators into directors for TV shows
+                        # For TV, creators are NOT merged into directors or writers anymore
                         orig_directors = list(directors)  # directors from crew
                         orig_creators = list(creators)    # creators from created_by
-                        if search_type == "tv":
-                            directors = list({d for d in directors + creators if d})
-                            # For TV, treat creators as writers as well
-                            writers = list({w for w in writers + creators if w})
-                        else:
-                            directors = list({d for d in directors if d})
-                        # --- DEBUG LOGGING for directors/creators ---
+                        # directors and writers stay distinct
+                        # --- DEBUG LOGGING for directors/creators origin ---
                         debug_log = ""
                         if search_type == "tv":
                             if orig_directors and orig_creators:
-                                debug_log = f"Directors from TMDB crew + Creators from TMDB created_by ({', '.join(orig_creators)})"
+                                debug_log = f"Directors from TMDB crew; Creators from TMDB created_by ({', '.join(orig_creators)})"
                             elif orig_directors and not orig_creators:
                                 debug_log = "Directors found in TMDB crew"
                             elif orig_creators and not orig_directors:
@@ -198,8 +195,16 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
             meta["directors"] = ["Unknown"]
         if "cast" not in meta:
             meta["cast"] = []
-        if "genres" not in meta:
-            meta["genres"] = ["Unknown"]
+        # --- GENRE MERGE LOGIC FIX ---
+        # If OMDb returned genres, keep them, otherwise use TMDB or fallback
+        if "genres" not in meta or not meta["genres"]:
+            if omdb_genres:
+                meta["genres"] = omdb_genres
+            else:
+                meta["genres"] = ["Unknown"]
+        # If OMDb result (preferred), ensure genres not lost
+        elif omdb_result and omdb_genres:
+            meta["genres"] = omdb_genres
         if "writers" not in meta:
             meta["writers"] = []
         # Remove created_by if present
@@ -1428,9 +1433,12 @@ def show_favorites(fav_type, label):
                 ]
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
-            # Directors (for both movies and shows, creators merged in directors for TV)
+            # Directors
             if fav.get("directors"):
                 link_list(fav["directors"], "director", "🎬", "Directors")
+            # Writers
+            if fav.get("writers"):
+                link_list(fav["writers"], "writer", "✍️", "Writers")
             # Writers
             if fav.get("writers"):
                 link_list(fav["writers"], "writer", "✍️", "Writers")
