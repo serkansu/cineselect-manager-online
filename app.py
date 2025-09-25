@@ -121,8 +121,20 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")]
                         # Created_by (only for TV shows)
                         creators = []
+                        debug_extra = None
                         if search_type == "tv":
-                            creators = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
+                            # Improved created_by handling
+                            if "created_by" in det:
+                                if det.get("created_by"):
+                                    creators = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
+                                    if not creators:
+                                        debug_extra = "created_by field present but empty"
+                                    else:
+                                        debug_extra = f"Creators found: {', '.join(creators)}"
+                                else:
+                                    debug_extra = "created_by field present but empty"
+                            else:
+                                debug_extra = "created_by field missing from TMDB response"
                         # Always merge creators into directors for TV shows
                         orig_directors = list(directors)  # directors from crew
                         orig_creators = list(creators)    # creators from created_by
@@ -146,6 +158,9 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                                 debug_log = "Directors found in TMDB crew"
                             else:
                                 debug_log = "No directors found in TMDB"
+                        # Append debug_extra to debug_log if defined
+                        if debug_extra:
+                            debug_log = debug_log + " | " + debug_extra if debug_log else debug_extra
                         # Insert debug_log as a key in the result
                         if not directors:
                             directors = ["Unknown"]
