@@ -8,6 +8,7 @@ for param, sskey in [
     ("filter_actor", "filter_actor"),
     ("filter_genre", "filter_genre"),
     ("filter_created_by", "filter_created_by"),
+    ("filter_writer", "filter_writer"),  # Added for writers
 ]:
     val = qp.get(param)
     # Normalize (Streamlit may give list or str)
@@ -92,8 +93,15 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     directors = [x.strip() for x in (d.get("Director") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     cast = [x.strip() for x in (d.get("Actors") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
-                    if directors or cast or genres:
-                        omdb_result = {"directors": directors, "cast": cast, "genres": genres, "debug_log": "Directors from OMDb"}
+                    writers = [x.strip() for x in (d.get("Writer") or "").split(",") if x.strip() and x.strip() != "N/A"]
+                    if directors or cast or genres or writers:
+                        omdb_result = {
+                            "directors": directors,
+                            "cast": cast,
+                            "genres": genres,
+                            "writers": writers,
+                            "debug_log": "Directors from OMDb"
+                        }
     except Exception as e:
         print("fetch_metadata OMDb error:", e)
 
@@ -119,6 +127,8 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
                         # Directors
                         directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")]
+                        # Writers (from crew, job == "Writer")
+                        writers = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Writer" and c.get("name")]
                         # Created_by (only for TV shows)
                         creators = []
                         debug_extra = None
@@ -140,6 +150,8 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         orig_creators = list(creators)    # creators from created_by
                         if search_type == "tv":
                             directors = list({d for d in directors + creators if d})
+                            # For TV, treat creators as writers as well
+                            writers = list({w for w in writers + creators if w})
                         else:
                             directors = list({d for d in directors if d})
                         # --- DEBUG LOGGING for directors/creators ---
@@ -172,13 +184,14 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                             "directors": directors,
                             "cast": cast,
                             "genres": genres,
+                            "writers": writers,
                             "debug_log": debug_log,
                         }
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
     # Merge fetched data, OMDb preferred
-    # Only ever include directors, cast, genres (no created_by)
+    # Only ever include directors, cast, genres, writers (no created_by)
     if omdb_result or tmdb_result:
         meta = omdb_result or tmdb_result
         if "directors" not in meta:
@@ -187,6 +200,8 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
             meta["cast"] = []
         if "genres" not in meta:
             meta["genres"] = ["Unknown"]
+        if "writers" not in meta:
+            meta["writers"] = []
         # Remove created_by if present
         meta.pop("created_by", None)
         # If debug_log missing (e.g. OMDb result), add fallback debug_log
@@ -197,6 +212,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
             "directors": ["Unknown"],
             "cast": [],
             "genres": ["Unknown"],
+            "writers": [],
             "debug_log": "No directors/creators found (OMDb+TMDB)",
         }
 
@@ -204,7 +220,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     if existing is not None:
         # Defensive: support both None and empty list as "empty"
         result = {}
-        for field in ("directors", "cast", "genres"):
+        for field in ("directors", "cast", "genres", "writers"):
             existing_val = existing.get(field)
             # Treat empty list, None, or ["Unknown"] as empty for directors/genres
             if field in ("directors", "genres"):
@@ -213,6 +229,11 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                 else:
                     result[field] = existing_val
             elif field == "cast":
+                if not existing_val or (isinstance(existing_val, list) and len(existing_val) == 0):
+                    result[field] = meta.get(field, [])
+                else:
+                    result[field] = existing_val
+            elif field == "writers":
                 if not existing_val or (isinstance(existing_val, list) and len(existing_val) == 0):
                     result[field] = meta.get(field, [])
                 else:
@@ -286,6 +307,7 @@ def backfill_metadata(limit=20):
                     "directors": meta.get("directors", []),
                     "cast":      meta.get("cast", []),
                     "genres":    meta.get("genres", []),
+                    "writers":   meta.get("writers", []),
                 }
                 db.collection(collection).document(item["id"]).update(update_data)
                 append_seed_meta(imdb_id, title, year, meta)   # ✅ CSV’ye de yaz
@@ -575,7 +597,7 @@ def overwrite_seed_meta(docs):
     try:
         with SEED_META_PATH.open("w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
-            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
+            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres", "writers"])
             for doc in docs:
                 item = doc.to_dict()
                 imdb_id = item.get("imdb", "")
@@ -584,7 +606,8 @@ def overwrite_seed_meta(docs):
                 directors   = "; ".join(item.get("directors", []))
                 cast        = "; ".join(item.get("cast", []))
                 genres      = "; ".join(item.get("genres", []))
-                w.writerow([imdb_id, title, year, directors, cast, genres])
+                writers     = "; ".join(item.get("writers", []))
+                w.writerow([imdb_id, title, year, directors, cast, genres, writers])
     except Exception as e:
         print("overwrite_seed_meta error:", e)
 
@@ -605,7 +628,7 @@ def append_seed_meta(imdb_id, title, year, meta):
     with SEED_META_PATH.open("a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if write_header:
-            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres"])
+            w.writerow(["imdb_id", "title", "year", "directors", "cast", "genres", "writers"])
         w.writerow([
             imdb_id,
             title,
@@ -613,6 +636,7 @@ def append_seed_meta(imdb_id, title, year, meta):
             "; ".join(meta.get("directors", [])),
             "; ".join(meta.get("cast", [])),
             "; ".join(meta.get("genres", [])),
+            "; ".join(meta.get("writers", [])),
         ])
 # --- /seed okuma fonksiyonu ---
 def get_imdb_id_from_tmdb(title, year=None, is_series=False):
@@ -1225,7 +1249,7 @@ sort_option = st.selectbox("Sort by:", ["IMDb", "RT", "CineSelect", "Year"], ind
 
 
 #
-# Build directors, actors, genres, created_by lists based on selected media_type
+# Build directors, actors, genres, writers, created_by lists based on selected media_type
 if media_type == "Movie":
     source_docs = db.collection("favorites").where("type", "==", "movie").stream()
 elif media_type == "TV Show":
@@ -1248,7 +1272,14 @@ elif media_type == "TV Show":
 else:
     source_docs = []
 genres = sorted({g for doc in source_docs for g in (doc.to_dict().get("genres") or [])})
-
+# Writers list (for both movies and shows)
+if media_type == "Movie":
+    source_docs = db.collection("favorites").where("type", "==", "movie").stream()
+elif media_type == "TV Show":
+    source_docs = db.collection("favorites").where("type", "==", "show").stream()
+else:
+    source_docs = []
+writers = sorted({w for doc in source_docs for w in (doc.to_dict().get("writers") or [])})
 # For created_by: only for TV Show
 created_by_list = []
 if media_type == "TV Show":
@@ -1257,7 +1288,7 @@ if media_type == "TV Show":
 
 ## --- Unified filter row (stateless, no query_params) ---
 if media_type == "TV Show":
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         selected_directors = st.multiselect(
             "🎬 Filter by Director", directors,
@@ -1278,8 +1309,13 @@ if media_type == "TV Show":
             "🎬 Filter by Created by", created_by_list,
             default=[st.session_state["filter_created_by"]] if st.session_state.get("filter_created_by") else []
         )
+    with col5:
+        selected_writers = st.multiselect(
+            "✍️ Filter by Writer", writers,
+            default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
+        )
 else:
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         selected_directors = st.multiselect(
             "🎬 Filter by Director", directors,
@@ -1295,7 +1331,11 @@ else:
             "🎞 Filter by Genre", genres,
             default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
         )
-    
+    with col4:
+        selected_writers = st.multiselect(
+            "✍️ Filter by Writer", writers,
+            default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
+        )
 def get_sort_key(fav):
     try:
         if sort_option == "IMDb":
@@ -1322,22 +1362,28 @@ def show_favorites(fav_type, label):
     # Apply genre filter(s) if selected
     if selected_genres:
         favorites = [f for f in favorites if any(g in (f.get("genres", []) or []) for g in selected_genres)]
+    # Apply writers filter(s) if selected
+    if selected_writers:
+        favorites = [f for f in favorites if any(w in (f.get("writers") or []) for w in selected_writers)]
     # Apply created_by filter(s) if present (for shows only)
     if fav_type == "show":
         # selected_created_by is only defined if media_type == "TV Show"
         if "selected_created_by" in globals() and selected_created_by:
             favorites = [f for f in favorites if any(cb in (f.get("created_by") or []) for cb in selected_created_by)]
-    # --- Also support single-click filter by director, actor, genre, created_by via session_state ---
+    # --- Also support single-click filter by director, actor, genre, created_by, writer via session_state ---
     fd = st.session_state.get("filter_director")
     fa = st.session_state.get("filter_actor")
     fg = st.session_state.get("filter_genre")
     fcb = st.session_state.get("filter_created_by")
+    fw = st.session_state.get("filter_writer")
     if fd:
         favorites = [f for f in favorites if fd in f.get("directors",[])]
     if fa:
         favorites = [f for f in favorites if fa in f.get("cast",[])]
     if fg:
         favorites = [f for f in favorites if fg in f.get("genres",[])]
+    if fw:
+        favorites = [f for f in favorites if fw in (f.get("writers") or [])]
     if fav_type == "show" and fcb:
         favorites = [f for f in favorites if fcb in (f.get("created_by") or [])]
 
@@ -1385,6 +1431,9 @@ def show_favorites(fav_type, label):
             # Directors (for both movies and shows, creators merged in directors for TV)
             if fav.get("directors"):
                 link_list(fav["directors"], "director", "🎬", "Directors")
+            # Writers
+            if fav.get("writers"):
+                link_list(fav["writers"], "writer", "✍️", "Writers")
             # Cast
             if fav.get("cast"):
                 link_list(fav["cast"], "actor", "🎭", "Cast")
@@ -1498,10 +1547,11 @@ def show_favorites(fav_type, label):
             if i_key not in st.session_state:
                 st.session_state[i_key] = current
 
-            # --- Editable fields for directors, cast, genres (single-line text_area) ---
+            # --- Editable fields for directors, cast, genres, writers (single-line text_area) ---
             dir_key = f"edit_dirs_{fav['id']}"
             cast_key = f"edit_cast_{fav['id']}"
             genres_key = f"edit_genres_{fav['id']}"
+            writers_key = f"edit_writers_{fav['id']}"
             # Pre-populate with joined string
             if dir_key not in st.session_state:
                 st.session_state[dir_key] = "; ".join(fav.get("directors", []))
@@ -1509,6 +1559,8 @@ def show_favorites(fav_type, label):
                 st.session_state[cast_key] = "; ".join(fav.get("cast", []))
             if genres_key not in st.session_state:
                 st.session_state[genres_key] = "; ".join(fav.get("genres", []))
+            if writers_key not in st.session_state:
+                st.session_state[writers_key] = "; ".join(fav.get("writers", []))
 
             st.slider(
                 "🎯 CS:", 1, 10000, st.session_state[s_key], step=1,
@@ -1520,7 +1572,7 @@ def show_favorites(fav_type, label):
             )
 
             # Compact editable text areas (single-line each)
-            edit_cols = st.columns(3)
+            edit_cols = st.columns(4)
             with edit_cols[0]:
                 st.text_area(
                     "Directors", value=st.session_state[dir_key], key=dir_key,
@@ -1536,21 +1588,28 @@ def show_favorites(fav_type, label):
                     "Genres", value=st.session_state[genres_key], key=genres_key,
                     height=28, label_visibility="visible"
                 )
+            with edit_cols[3]:
+                st.text_area(
+                    "Writers", value=st.session_state[writers_key], key=writers_key,
+                    height=28, label_visibility="visible"
+                )
 
             cols_edit = st.columns([1, 1, 2])
             with cols_edit[0]:
                 if st.button("✅ Kaydet", key=f"save_{fav['id']}"):
                     new_val = _clamp_cs(st.session_state.get(i_key, st.session_state.get(s_key, current)))
-                    # Parse directors/cast/genres from textareas (split on ";")
+                    # Parse directors/cast/genres/writers from textareas (split on ";")
                     dir_list = [d.strip() for d in (st.session_state.get(dir_key, "") or "").split(";") if d.strip()]
                     cast_list = [c.strip() for c in (st.session_state.get(cast_key, "") or "").split(";") if c.strip()]
                     genres_list = [g.strip() for g in (st.session_state.get(genres_key, "") or "").split(";") if g.strip()]
+                    writers_list = [w.strip() for w in (st.session_state.get(writers_key, "") or "").split(";") if w.strip()]
 
                     db.collection("favorites").document(fav["id"]).update({
                         "cineselectRating": new_val,
                         "directors": dir_list,
                         "cast": cast_list,
                         "genres": genres_list,
+                        "writers": writers_list,
                     })
                     # Also update seed_meta.csv
                     append_seed_meta(
@@ -1561,6 +1620,7 @@ def show_favorites(fav_type, label):
                             "directors": dir_list,
                             "cast": cast_list,
                             "genres": genres_list,
+                            "writers": writers_list,
                         }
                     )
                     st.success(f"✅ {fav['title']} güncellendi.")
