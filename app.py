@@ -296,6 +296,57 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
 
 def backfill_metadata(limit=20):
     db = get_firestore()
+    # --- Retry from missing_metadata.csv before scanning all docs ---
+    retry_entries = []
+    try:
+        if os.path.exists("missing_metadata.csv"):
+            with open("missing_metadata.csv", newline="", encoding="utf-8") as f:
+                r = csv.DictReader(f)
+                for row in r:
+                    imdb_id = (row.get("imdb_id") or "").strip()
+                    title = (row.get("title") or "").strip()
+                    year = (row.get("year") or "").strip()
+                    if imdb_id and imdb_id != "tt0000000":
+                        retry_entries.append((title, year, imdb_id))
+    except Exception as e:
+        print("retry load missing_metadata error:", e)
+
+    # Try to refetch metadata for all retry_entries
+    cleaned_missing = []
+    for title, year, imdb_id in retry_entries:
+        meta = fetch_metadata(imdb_id, title, year, is_series=True)
+        if meta and (meta.get("directors") or meta.get("cast") or meta.get("genres") or meta.get("writers")):
+            try:
+                update_data = {
+                    "directors": meta.get("directors", []),
+                    "cast":      meta.get("cast", []),
+                    "genres":    meta.get("genres", []),
+                    "writers":   meta.get("writers", []),
+                }
+                # Update Firestore if doc exists
+                matches = list(db.collection("favorites").where("imdb", "==", imdb_id).stream())
+                for d in matches:
+                    db.collection("favorites").document(d.id).update(update_data)
+                append_seed_meta(imdb_id, title, year, meta)
+                print(f"✅ Missing re-fetched successfully: {title} ({year})")
+            except Exception as e:
+                print(f"⚠️ Failed to update retried {title}: {e}")
+                cleaned_missing.append({"title": title, "year": year, "imdb_id": imdb_id, "note": "retry failed"})
+        else:
+            cleaned_missing.append({"title": title, "year": year, "imdb_id": imdb_id, "note": "still missing"})
+
+    # Rewrite missing_metadata.csv only with still-missing entries
+    if cleaned_missing:
+        with open("missing_metadata.csv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["title", "year", "imdb_id", "note"])
+            for row in cleaned_missing:
+                writer.writerow([row["title"], row["year"], row["imdb_id"], row["note"]])
+    else:
+        # If all recovered, wipe the file clean
+        with open("missing_metadata.csv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["title", "year", "imdb_id", "note"])
     # toplamı göstermek için önce topla
     all_docs = []
     for type_name, collection in [("movie", "favorites"), ("show", "favorites")]:
