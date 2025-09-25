@@ -121,12 +121,12 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # --- TV shows: use created_by if directors is empty or ["Unknown"], always propagate created_by for TV/Show
+                        # --- TV shows: always propagate created_by for TV/Show
                         created_by = []
                         if search_type in ["tv", "show"]:
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
+                            # created_by her zaman meta’ya yazılsın; directors boşsa, directors = []
                             if not directors or directors == ["Unknown"]:
-                                # For TV, if directors missing, leave directors empty
                                 directors = []
                         if not directors:
                             directors = ["Unknown"]
@@ -166,9 +166,8 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
-        # For TV shows, propagate created_by if present
-        if "created_by" in meta:
-            result["created_by"] = meta["created_by"]
+        # For TV shows, propagate created_by even if empty
+        result["created_by"] = meta.get("created_by", [])
         return result
     else:
         return meta
@@ -1336,8 +1335,11 @@ def show_favorites(fav_type, label):
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
             # Directors / Created by (label differs for shows)
-            if fav.get("type") == "show" and fav.get("created_by"):
-                link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
+            if fav.get("type") == "show":
+                if fav.get("created_by"):
+                    link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
+                elif fav.get("directors"):
+                    link_list(fav["directors"], "director", "🎬", "Directors")
             elif fav.get("directors"):
                 link_list(fav["directors"], "director", "🎬", "Directors")
             # Cast
