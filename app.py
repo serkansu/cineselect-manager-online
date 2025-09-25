@@ -192,37 +192,58 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     # --- Unified merge logic for directors, writers, cast, genres ---
     def merge_field(omdb_val, tmdb_val):
         """
-        Merge fields from OMDb and TMDb with rules:
-        - Ignore invalid values: None, empty string/list, "N/A", "Unknown", "None"
-        - OMDb has priority if valid
-        - If both OMDb and TMDb provide values, merge them and remove duplicates
+        Merge fields from OMDb and TMDb for any of: writers, directors, cast, genres.
+        - Normalize both OMDb and TMDb values to lists of strings, handling dicts with 'name'.
+        - Ignore values that are missing, "N/A", "Unknown", "None", or empty.
+        - If both OMDb and TMDb are present and valid, merge uniquely (preserving order).
+        - If only one is present, use it.
         """
         def normalize(val):
+            # Accepts str, list of str, list of dicts (with "name"), or None
             if not val:
                 return []
+            # If it's a dict with "name", treat as one item
+            if isinstance(val, dict):
+                n = val.get("name")
+                if n and str(n).strip().lower() not in ("n/a", "unknown", "none", ""):
+                    return [str(n).strip()]
+                return []
             if isinstance(val, str):
-                parts = [p.strip() for p in val.split(",") if p and p.strip().lower() not in ["n/a", "unknown", "none"]]
+                # OMDb: comma or semicolon separated string
+                parts = [p.strip() for p in re.split(r"[;,]", val) if p and p.strip().lower() not in ("n/a", "unknown", "none", "")]
                 return parts
-            elif isinstance(val, list):
+            if isinstance(val, list):
                 cleaned = []
                 for v in val:
-                    if isinstance(v, dict) and "name" in v:
-                        v = v["name"]
-                    if isinstance(v, str) and v.strip().lower() not in ["n/a", "unknown", "none"]:
-                        cleaned.append(v.strip())
+                    if isinstance(v, dict):
+                        n = v.get("name")
+                        if n and str(n).strip().lower() not in ("n/a", "unknown", "none", ""):
+                            cleaned.append(str(n).strip())
+                    elif isinstance(v, str):
+                        if v.strip().lower() not in ("n/a", "unknown", "none", ""):
+                            cleaned.append(v.strip())
                 return cleaned
             return []
 
+        # Normalize both
         omdb_list = normalize(omdb_val)
         tmdb_list = normalize(tmdb_val)
 
-        if omdb_list and not tmdb_list:
-            return omdb_list
-        if tmdb_list and not omdb_list:
-            return tmdb_list
-        if omdb_list and tmdb_list:
-            merged = omdb_list + [x for x in tmdb_list if x not in omdb_list]
+        # Filter out empty/invalid lists
+        def is_valid(lst):
+            return bool(lst and any(x and x.strip().lower() not in ("n/a", "unknown", "none", "") for x in lst))
+
+        omdb_valid = is_valid(omdb_list)
+        tmdb_valid = is_valid(tmdb_list)
+
+        # Merge uniquely, preserving order (OMDb priority)
+        if omdb_valid and tmdb_valid:
+            merged = list(dict.fromkeys(omdb_list + tmdb_list))
             return merged
+        if omdb_valid:
+            return omdb_list
+        if tmdb_valid:
+            return tmdb_list
         return []
 
     # OMDb/TMDb raw data
@@ -234,52 +255,26 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     tmdb_data = tmdb_result if tmdb_result else {}
 
     meta = {}
+    # Writers: prefer created_by from TMDb if present, else writers field
+    # Use created_by if present, else fall back to writers
+    meta["writers"] = merge_field(
+        omdb_data.get("Writer") if omdb_data else None,
+        tmdb_data.get("created_by") or tmdb_data.get("writers")
+    )
     # Directors
     meta["directors"] = merge_field(
         omdb_data.get("Director") if omdb_data else None,
-        tmdb_data.get("directors"),
+        tmdb_data.get("directors")
     )
-    # Writers (normalize created_by to names if present)
-    created_by_names = []
-    cb_raw = tmdb_data.get("created_by")
-    if isinstance(cb_raw, list):
-        created_by_names = [c["name"] for c in cb_raw if isinstance(c, dict) and c.get("name")]
-
-    writers_val = created_by_names or tmdb_data.get("writers")
-
-    meta["writers"] = merge_field(
-        omdb_data.get("Writer") if omdb_data else None,
-        writers_val,
-    )
-    # Cast (TMDb: can be list of dicts with "name" or strings)
-    tmdb_cast_raw = tmdb_data.get("cast", [])
-    tmdb_cast = []
-    if isinstance(tmdb_cast_raw, list):
-        for c in tmdb_cast_raw:
-            if isinstance(c, dict):
-                n = c.get("name")
-                if n and str(n).strip().lower() not in ["n/a", "unknown", "none"]:
-                    tmdb_cast.append(str(n).strip())
-            elif isinstance(c, str) and c.strip().lower() not in ["n/a", "unknown", "none"]:
-                tmdb_cast.append(c.strip())
+    # Cast
     meta["cast"] = merge_field(
         omdb_data.get("Actors") if omdb_data else None,
-        tmdb_cast,
+        tmdb_data.get("cast")
     )
-    # Genres (TMDb: can be list of dicts with "name" or strings)
-    tmdb_genres_raw = tmdb_data.get("genres", [])
-    tmdb_genres = []
-    if isinstance(tmdb_genres_raw, list):
-        for g in tmdb_genres_raw:
-            if isinstance(g, dict):
-                n = g.get("name")
-                if n and str(n).strip().lower() not in ["n/a", "unknown", "none"]:
-                    tmdb_genres.append(str(n).strip())
-            elif isinstance(g, str) and g.strip().lower() not in ["n/a", "unknown", "none"]:
-                tmdb_genres.append(g.strip())
+    # Genres
     meta["genres"] = merge_field(
         omdb_data.get("Genre") if omdb_data else None,
-        tmdb_genres,
+        tmdb_data.get("genres")
     )
     # Debug log
     if omdb_result and omdb_result.get("debug_log"):
