@@ -1,35 +1,4 @@
-def clear_filter_if_empty(key):
-    """Resets the filter session state key to None if the associated widget selection is empty.
-    Also clears the query param for that filter and triggers rerun if actually cleared.
-    Additionally, if no filter is active after clearing, resets all query params and reruns to show the full list."""
-    val = st.session_state.get(key)
-    # If the widget selection is empty (e.g. user clicked ❌), clear session state and query param
-    if not val:
-        was_set = st.session_state.get(key, None) is not None
-        st.session_state[key] = None
-        qp = st.query_params
-        rerun_needed = False
-        # Remove the filter key from query params if present
-        if key in ["filter_director", "filter_actor", "filter_genre", "filter_created_by"]:
-            if key in qp:
-                del qp[key]
-                rerun_needed = True
-        # Only rerun if the key was set and got cleared, to avoid infinite loops
-        if was_set or rerun_needed:
-            st.rerun()
-        # After rerun, check if any filter is still active; if not, clear ALL query params and rerun
-        # (Do this only if all filter keys are empty or None)
-        if not any([
-            st.session_state.get("filter_director"),
-            st.session_state.get("filter_actor"),
-            st.session_state.get("filter_genre"),
-            st.session_state.get("filter_created_by")
-        ]):
-            # Clear all query params (reset URL to base)
-            st.query_params.clear()
-            st.rerun()
 import streamlit as st
-from bs4 import BeautifulSoup
 import urllib.parse
 # --- Query param parsing for single-click filters ---
 # At the top of the script, parse st.query_params and set session_state for filters
@@ -102,7 +71,7 @@ def read_seed_meta(imdb_id: str):
     return None
 
 @st.cache_data(show_spinner=False)
-def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=None, scraping_enabled=False):
+def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=None):
     """
     OMDb öncelikli, gerekirse TMDB fallback ile metadata getirir.
     Yalnızca Firestore'daki mevcut (manuel) değerleri BOŞ olan alanları doldurur.
@@ -148,27 +117,19 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         det = d_resp.json()
                         # Genres
                         genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
+                        # Directors
+                        directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # For TV shows, always set created_by from det["created_by"], and merge with all directors from crew
+                        # --- TV shows: always propagate created_by for TV/Show
+                        created_by = []
                         if search_type in ["tv", "show"]:
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
-                            all_directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")]
-                            # Merge created_by and directors, preserving order and removing duplicates
-                            merged_creators = []
-                            seen = set()
-                            for name in created_by + all_directors:
-                                if name and name not in seen:
-                                    merged_creators.append(name)
-                                    seen.add(name)
-                            # Always set both created_by and directors to merged list for TV shows
-                            created_by = merged_creators
-                            directors = merged_creators
-                        else:
-                            created_by = []
-                            directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
-                            if not directors:
-                                directors = ["Unknown"]
+                            # created_by her zaman meta’ya yazılsın; directors boşsa, directors = []
+                            if not directors or directors == ["Unknown"]:
+                                directors = []
+                        if not directors:
+                            directors = ["Unknown"]
                         if not genres:
                             genres = ["Unknown"]
                         tmdb_result = {
@@ -180,103 +141,6 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
-    # IMDb scraping fallback (only if explicitly enabled)
-    if scraping_enabled:
-        # Try to extract directors and cast if not already found
-        # Only if directors is empty or ["Unknown"]
-        directors = None
-        cast = None
-        genres = None
-        # Try to get from tmdb_result or omdb_result
-        if tmdb_result:
-            directors = tmdb_result.get("directors", [])
-            cast = tmdb_result.get("cast", [])
-            genres = tmdb_result.get("genres", [])
-        elif omdb_result:
-            directors = omdb_result.get("directors", [])
-            cast = omdb_result.get("cast", [])
-            genres = omdb_result.get("genres", [])
-        else:
-            directors = []
-            cast = []
-            genres = []
-        # Only scrape if directors is empty or ["Unknown"]
-        if not directors or (isinstance(directors, list) and (len(directors) == 0 or directors == ["Unknown"])):
-            try:
-                import requests
-                from bs4 import BeautifulSoup
-                imdb_url = f"https://www.imdb.com/title/{imdb_id}/fullcredits/?ref_=tt_cl_sm"
-                resp = requests.get(imdb_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    # Directors
-                    dir_header = soup.find("h4", string=lambda t: t and "Directed by" in t)
-                    if dir_header:
-                        dir_table = dir_header.find_next("table")
-                        if dir_table:
-                            directors = [a.get_text(strip=True) for a in dir_table.select("td.name a")]
-                    # Created by (TV shows)
-                    created_by_header = soup.find("h4", string=lambda t: t and "Series Directed by" in t)
-                    if created_by_header:
-                        dir_table = created_by_header.find_next("table")
-                        if dir_table:
-                            if directors is None:
-                                directors = []
-                            directors.extend([a.get_text(strip=True) for a in dir_table.select("td.name a")])
-                    # Cast
-                    cast_header = soup.find("h4", string=lambda t: t and "Cast" in t)
-                    if cast_header:
-                        cast_table = cast_header.find_next("table")
-                        if cast_table:
-                            cast = [a.get_text(strip=True) for a in cast_table.select("td.primary_photo + td a")][:10]
-            except Exception as e:
-                print("IMDb scraping error:", e)
-        # Ensure directors/cast/genres are not None
-        if directors is None:
-            directors = []
-        if cast is None:
-            cast = []
-        if genres is None:
-            genres = []
-        return {"directors": directors or ["Unknown"], "cast": cast or [], "genres": genres or ["Unknown"]}
-
-    # --- IMDb full credits fallback if directors is empty or ["Unknown"] ---
-    # Only attempt if both OMDb and TMDB failed to yield real directors
-    # We'll merge into the TMDB result (if present), else meta
-    imdb_fullcredits_result = None
-    def _directors_empty(dlist):
-        return not dlist or (isinstance(dlist, list) and (len(dlist) == 0 or dlist == ["Unknown"]))
-    # Determine which result to patch (TMDB preferred for structure)
-    target_result = tmdb_result if tmdb_result is not None else (omdb_result if omdb_result is not None else None)
-    patch_needed = False
-    if imdb_id:
-        # Check if directors is missing or ["Unknown"]
-        if target_result:
-            if _directors_empty(target_result.get("directors", [])):
-                patch_needed = True
-        else:
-            if _directors_empty(None):
-                patch_needed = True
-    if patch_needed or (not omdb_result and not tmdb_result):
-        try:
-            imdb_fullcredits_result = scrape_imdb_fullcredits(imdb_id)
-            # Only patch if directors found
-            if imdb_fullcredits_result and imdb_fullcredits_result.get("directors"):
-                if target_result is not None:
-                    # Patch into TMDB or OMDb result
-                    target_result["directors"] = imdb_fullcredits_result.get("directors", [])
-                    # Only update cast if original is empty
-                    if not target_result.get("cast"):
-                        target_result["cast"] = imdb_fullcredits_result.get("cast", [])
-                    # Only update genres if original is empty or ["Unknown"]
-                    if _directors_empty(target_result.get("genres", [])):
-                        target_result["genres"] = imdb_fullcredits_result.get("genres", [])
-                else:
-                    # Patch into meta fallback below
-                    tmdb_result = imdb_fullcredits_result
-        except Exception as e:
-            print(f"fetch_metadata IMDb fullcredits scrape error: {e}")
-
     # Merge fetched data, OMDb preferred
     meta = omdb_result or tmdb_result or {
         "directors": ["Unknown"],
@@ -284,19 +148,6 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         "genres": ["Unknown"],
         "created_by": []
     }
-    # For TV shows, ensure both 'created_by' and 'directors' are present and consistent if either exists
-    if (is_series or (meta.get("created_by") or []) or (meta.get("directors") or [])) and ("created_by" in meta or "directors" in meta):
-        cb = meta.get("created_by", [])
-        dirs = meta.get("directors", [])
-        # For TV, always merge both
-        merged = []
-        seen = set()
-        for name in cb + dirs:
-            if name and name not in seen:
-                merged.append(name)
-                seen.add(name)
-        meta["created_by"] = merged
-        meta["directors"] = merged
 
     # --- Only fill empty fields; keep existing manual values if present ---
     if existing is not None:
@@ -315,85 +166,11 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
-        # For TV shows, propagate created_by even if empty, and always if present in meta
+        # For TV shows, propagate created_by even if empty
         result["created_by"] = meta.get("created_by", [])
         return result
     else:
         return meta
-
-
-# --- IMDb Full Credits Scraper Fallback ---
-def scrape_imdb_fullcredits(imdb_id):
-    """
-    Scrape IMDb full credits page for directors and main cast.
-    Returns dict: {'directors': [...], 'cast': [...], 'genres': []}
-    """
-    import requests
-    from bs4 import BeautifulSoup
-    url = f"https://www.imdb.com/title/{imdb_id}/fullcredits"
-    try:
-        resp = requests.get(url, timeout=15)
-        if resp.status_code != 200:
-            return {"directors": [], "cast": [], "genres": []}
-        soup = BeautifulSoup(resp.text, "html.parser")
-        directors = []
-        # Find the Directors section (can be "Directed by" or "Director" or "Directors")
-        # The page has a h4 or h3 with text "Directed by" or "Director(s)"
-        dir_header = None
-        for h in soup.find_all(["h4", "h3"]):
-            if h.get_text(strip=True).lower().startswith("directed by") or h.get_text(strip=True).lower().startswith("director"):
-                dir_header = h
-                break
-        if dir_header:
-            # The directors are in the next sibling table or list
-            sib = dir_header.find_next_sibling()
-            # Sometimes in ul > li > a, sometimes in table
-            if sib:
-                # Try table rows first
-                if sib.name == "table":
-                    for row in sib.find_all("tr"):
-                        for a in row.find_all("a"):
-                            name = a.get_text(strip=True)
-                            if name:
-                                directors.append(name)
-                elif sib.name == "ul":
-                    for li in sib.find_all("li"):
-                        a = li.find("a")
-                        if a:
-                            name = a.get_text(strip=True)
-                            if name:
-                                directors.append(name)
-        # If not found, fallback: look for div with class "credit_summary_item"
-        if not directors:
-            for div in soup.find_all("div", class_="credit_summary_item"):
-                h = div.find(["h4", "h3"])
-                if h and ("Director" in h.get_text(strip=True)):
-                    for a in div.find_all("a"):
-                        name = a.get_text(strip=True)
-                        if name:
-                            directors.append(name)
-        # Remove duplicates
-        directors = list(dict.fromkeys(directors))
-        # --- Cast extraction (main table: table with class "cast_list") ---
-        cast = []
-        cast_table = soup.find("table", class_="cast_list")
-        if cast_table:
-            for row in cast_table.find_all("tr"):
-                # Each row: td with class "primary_photo", next td is actor name
-                tds = row.find_all("td")
-                if len(tds) >= 2:
-                    a = tds[1].find("a")
-                    if a:
-                        name = a.get_text(strip=True)
-                        if name:
-                            cast.append(name)
-                if len(cast) >= 20:
-                    break
-        # Genres: not present on fullcredits page, so leave empty
-        return {"directors": directors, "cast": cast, "genres": []}
-    except Exception as e:
-        print(f"scrape_imdb_fullcredits error: {e}")
-        return {"directors": [], "cast": [], "genres": []}
 
 def backfill_metadata(limit=20):
     db = get_firestore()
@@ -555,7 +332,6 @@ from omdb import fetch_ratings
 import csv
 from pathlib import Path
 SEED_META_PATH = Path(__file__).parent / "seed_meta.csv"
-# --- Safe Firebase initialization ---
 import requests
 import firebase_admin
 import base64
@@ -563,13 +339,6 @@ from firebase_admin import credentials, firestore
 import json
 import os
 import time
-# --- Safe Firebase initialization ---
-if not firebase_admin._apps:
-    try:
-        cred = credentials.ApplicationDefault()
-        firebase_admin.initialize_app(cred)
-    except Exception as e:
-        print(f"Firebase init error (ignored if already initialized): {e}")
 # ---------- Sorting helpers for Streamio export ----------
 ROMAN_MAP = {
     "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
@@ -1330,7 +1099,7 @@ if query:
                 rt_score    = int(stats.get("rt") or 0)
 
                 # --- Fetch full metadata (directors, cast, genres) ---
-                new_meta = fetch_metadata(imdb_id, item["title"], item.get("year"), is_series=(media_key == "show"), scraping_enabled=True)
+                new_meta = fetch_metadata(imdb_id, item["title"], item.get("year"), is_series=(media_key == "show"))
 
                 # 🔎 DEBUG: Kaynak ve ham yanıtlar
                 st.write(f"🔍 Source: {source or '—'} | 🆔 IMDb ID: {imdb_id or '—'} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
@@ -1442,83 +1211,41 @@ if media_type == "TV Show":
 if media_type == "TV Show":
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        default_director = (
-            [st.session_state["filter_director"]]
-            if st.session_state.get("filter_director") in directors
-            else []
-        )
         selected_directors = st.multiselect(
-            "🎬 Filter by Director", directors, default=default_director,
-            key="director_multiselect",
-            on_change=clear_filter_if_empty, args=("filter_director",)
+            "🎬 Filter by Director", directors,
+            default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
         )
     with col2:
-        default_actor = (
-            [st.session_state["filter_actor"]]
-            if st.session_state.get("filter_actor") in actors
-            else []
-        )
         selected_actors = st.multiselect(
-            "🎭 Filter by Actor", actors, default=default_actor,
-            key="actor_multiselect",
-            on_change=clear_filter_if_empty, args=("filter_actor",)
+            "🎭 Filter by Actor", actors,
+            default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
         )
     with col3:
-        default_genre = (
-            [st.session_state["filter_genre"]]
-            if st.session_state.get("filter_genre") in genres
-            else []
-        )
         selected_genres = st.multiselect(
-            "🎞 Filter by Genre", genres, default=default_genre,
-            key="genre_multiselect",
-            on_change=clear_filter_if_empty, args=("filter_genre",)
+            "🎞 Filter by Genre", genres,
+            default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
         )
     with col4:
-        default_created_by = (
-            [st.session_state["filter_created_by"]]
-            if st.session_state.get("filter_created_by") in created_by_list
-            else []
-        )
         selected_created_by = st.multiselect(
-            "🎬 Filter by Created by", created_by_list, default=default_created_by,
-            key="createdby_multiselect",
-            on_change=clear_filter_if_empty, args=("filter_created_by",)
+            "🎬 Filter by Created by", created_by_list,
+            default=[st.session_state["filter_created_by"]] if st.session_state.get("filter_created_by") else []
         )
 else:
     col1, col2, col3 = st.columns(3)
     with col1:
-        default_director = (
-            [st.session_state["filter_director"]]
-            if st.session_state.get("filter_director") in directors
-            else []
-        )
         selected_directors = st.multiselect(
-            "🎬 Filter by Director", directors, default=default_director,
-            key="director_multiselect",
-            on_change=clear_filter_if_empty, args=("filter_director",)
+            "🎬 Filter by Director", directors,
+            default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
         )
     with col2:
-        default_actor = (
-            [st.session_state["filter_actor"]]
-            if st.session_state.get("filter_actor") in actors
-            else []
-        )
         selected_actors = st.multiselect(
-            "🎭 Filter by Actor", actors, default=default_actor,
-            key="actor_multiselect",
-            on_change=clear_filter_if_empty, args=("filter_actor",)
+            "🎭 Filter by Actor", actors,
+            default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
         )
     with col3:
-        default_genre = (
-            [st.session_state["filter_genre"]]
-            if st.session_state.get("filter_genre") in genres
-            else []
-        )
         selected_genres = st.multiselect(
-            "🎞 Filter by Genre", genres, default=default_genre,
-            key="genre_multiselect",
-            on_change=clear_filter_if_empty, args=("filter_genre",)
+            "🎞 Filter by Genre", genres,
+            default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
         )
     
 def get_sort_key(fav):
@@ -1535,67 +1262,36 @@ def get_sort_key(fav):
         return 0
 
 def show_favorites(fav_type, label):
-    # --- Ensure session_state filter keys are cleared if widget selections are empty ---
-    # EXPLICIT resets: if any selected_x is empty, reset session_state and reload all
-    global selected_directors, selected_actors, selected_genres, selected_created_by
-    if "selected_directors" in globals() and not selected_directors:
-        st.session_state["filter_director"] = None
-    if "selected_actors" in globals() and not selected_actors:
-        st.session_state["filter_actor"] = None
-    if "selected_genres" in globals() and not selected_genres:
-        st.session_state["filter_genre"] = None
-    if fav_type == "show" and "selected_created_by" in globals() and not selected_created_by:
-        st.session_state["filter_created_by"] = None
-    # Always call clear_filter_if_empty for all filter types to ensure state is reset when cleared
-    clear_filter_if_empty("filter_director")
-    clear_filter_if_empty("filter_actor")
-    clear_filter_if_empty("filter_genre")
-    clear_filter_if_empty("filter_created_by")
-    # --- Unified filtering logic: apply filters across movies and shows together if any filter is active ---
-    # Gather all favorites if any filter is active, else only per section.
+    # --- Filtering logic using session_state (no query_params) ---
+    docs = db.collection("favorites").where("type", "==", fav_type).stream()
+    favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
+    # Apply director filter(s) if selected
+    if selected_directors:
+        favorites = [f for f in favorites if any(d in (f.get("directors") or []) for d in selected_directors)]
+    # Apply actor/cast filter(s) if selected
+    if selected_actors:
+        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in selected_actors)]
+    # Apply genre filter(s) if selected
+    if selected_genres:
+        favorites = [f for f in favorites if any(g in (f.get("genres", []) or []) for g in selected_genres)]
+    # Apply created_by filter(s) if present (for shows only)
+    if fav_type == "show":
+        # selected_created_by is only defined if media_type == "TV Show"
+        if "selected_created_by" in globals() and selected_created_by:
+            favorites = [f for f in favorites if any(cb in (f.get("created_by") or []) for cb in selected_created_by)]
+    # --- Also support single-click filter by director, actor, genre, created_by via session_state ---
     fd = st.session_state.get("filter_director")
     fa = st.session_state.get("filter_actor")
     fg = st.session_state.get("filter_genre")
     fcb = st.session_state.get("filter_created_by")
-    # Combine all selected filters (from multiselects and single-click)
-    any_filter_active = (
-        (selected_directors if "selected_directors" in globals() else []) or
-        (selected_actors if "selected_actors" in globals() else []) or
-        (selected_genres if "selected_genres" in globals() else []) or
-        (fav_type == "show" and "selected_created_by" in globals() and selected_created_by) or
-        fd or fa or fg or (fav_type == "show" and fcb)
-    )
-    # If any filter is active, fetch all movies+shows together, else only current section
-    if any_filter_active:
-        # Get all favorites
-        all_favs = [doc.to_dict() for doc in db.collection("favorites").stream()]
-        # Apply filters
-        filtered = all_favs
-        # Multiselects
-        if "selected_directors" in globals() and selected_directors:
-            filtered = [f for f in filtered if any(d in (f.get("directors") or []) for d in selected_directors)]
-        if "selected_actors" in globals() and selected_actors:
-            filtered = [f for f in filtered if any(a in (f.get("cast") or []) for a in selected_actors)]
-        if "selected_genres" in globals() and selected_genres:
-            filtered = [f for f in filtered if any(g in (f.get("genres", []) or []) for g in selected_genres)]
-        # created_by only for shows
-        if fav_type == "show" and "selected_created_by" in globals() and selected_created_by:
-            filtered = [f for f in filtered if any(cb in (f.get("created_by") or []) for cb in selected_created_by)]
-        # Single-click session_state filters
-        if fd:
-            filtered = [f for f in filtered if fd in f.get("directors",[])]
-        if fa:
-            filtered = [f for f in filtered if fa in f.get("cast",[])]
-        if fg:
-            filtered = [f for f in filtered if fg in f.get("genres",[])]
-        if fav_type == "show" and fcb:
-            filtered = [f for f in filtered if fcb in (f.get("created_by") or [])]
-        # Now, split back by type
-        favorites = [f for f in filtered if (f.get("type", "").lower() == fav_type)]
-        favorites = sorted(favorites, key=get_sort_key, reverse=True)
-    else:
-        docs = db.collection("favorites").where("type", "==", fav_type).stream()
-        favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
+    if fd:
+        favorites = [f for f in favorites if fd in f.get("directors",[])]
+    if fa:
+        favorites = [f for f in favorites if fa in f.get("cast",[])]
+    if fg:
+        favorites = [f for f in favorites if fg in f.get("genres",[])]
+    if fav_type == "show" and fcb:
+        favorites = [f for f in favorites if fcb in (f.get("created_by") or [])]
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
@@ -1638,22 +1334,14 @@ def show_favorites(fav_type, label):
                 ]
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
-            # Directors + Created by (for shows, combine both as Created by + Directors)
+            # Directors / Created by (label differs for shows)
             if fav.get("type") == "show":
-                # Merge created_by and directors for display, preserving unique order
-                cb = fav.get("created_by", []) or []
-                dirs = fav.get("directors", []) or []
-                merged = []
-                seen = set()
-                for name in cb + dirs:
-                    if name and name not in seen:
-                        merged.append(name)
-                        seen.add(name)
-                if merged:
-                    link_list(merged, "created_by", "🎬", "Created by + Directors")
-            else:
-                if fav.get("directors"):
-                    link_list(fav.get("directors", []), "director", "🎬", "Directors")
+                if fav.get("created_by"):
+                    link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
+                elif fav.get("directors"):
+                    link_list(fav["directors"], "director", "🎬", "Directors")
+            elif fav.get("directors"):
+                link_list(fav["directors"], "director", "🎬", "Directors")
             # Cast
             if fav.get("cast"):
                 link_list(fav["cast"], "actor", "🎭", "Cast")
@@ -1731,7 +1419,7 @@ def show_favorites(fav_type, label):
                     year = fav.get("year")
                     is_series = (fav.get("type") == "show")
 
-                    new_meta = fetch_metadata(imdb_id, title, year, is_series=is_series, scraping_enabled=True)
+                    new_meta = fetch_metadata(imdb_id, title, year, is_series=is_series)
                     if new_meta:
                         update_data = {
                             "directors": new_meta.get("directors", []),
