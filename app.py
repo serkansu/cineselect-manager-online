@@ -200,7 +200,11 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     return []
                 return [v.strip() for v in val.split(",") if v.strip()]
             if isinstance(val, list):
-                return [v.strip() for v in val if v and v.strip().lower() not in ["n/a", "unknown", "none"]]
+                result = []
+                for v in val:
+                    if isinstance(v, str) and v.strip().lower() not in ["n/a", "unknown", "none"]:
+                        result.append(v.strip())
+                return result
             return []
         omdb_list = normalize(omdb_val)
         tmdb_list = normalize(tmdb_val)
@@ -240,14 +244,32 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         omdb_data.get("Writer") if omdb_data else None,
         writers_val,
     )
-    # Cast (TMDb: must be list of dicts with "name")
-    tmdb_cast = [c["name"] for c in tmdb_data.get("cast", []) if isinstance(c, dict) and "name" in c]
+    # Cast (TMDb: can be list of dicts with "name" or strings)
+    tmdb_cast_raw = tmdb_data.get("cast", [])
+    tmdb_cast = []
+    if isinstance(tmdb_cast_raw, list):
+        for c in tmdb_cast_raw:
+            if isinstance(c, dict):
+                n = c.get("name")
+                if n and str(n).strip().lower() not in ["n/a", "unknown", "none"]:
+                    tmdb_cast.append(str(n).strip())
+            elif isinstance(c, str) and c.strip().lower() not in ["n/a", "unknown", "none"]:
+                tmdb_cast.append(c.strip())
     meta["cast"] = merge_field(
         omdb_data.get("Actors") if omdb_data else None,
         tmdb_cast,
     )
-    # Genres (TMDb: must be list of dicts with "name")
-    tmdb_genres = [g["name"] for g in tmdb_data.get("genres", []) if isinstance(g, dict) and "name" in g]
+    # Genres (TMDb: can be list of dicts with "name" or strings)
+    tmdb_genres_raw = tmdb_data.get("genres", [])
+    tmdb_genres = []
+    if isinstance(tmdb_genres_raw, list):
+        for g in tmdb_genres_raw:
+            if isinstance(g, dict):
+                n = g.get("name")
+                if n and str(n).strip().lower() not in ["n/a", "unknown", "none"]:
+                    tmdb_genres.append(str(n).strip())
+            elif isinstance(g, str) and g.strip().lower() not in ["n/a", "unknown", "none"]:
+                tmdb_genres.append(g.strip())
     meta["genres"] = merge_field(
         omdb_data.get("Genre") if omdb_data else None,
         tmdb_genres,
