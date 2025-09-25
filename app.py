@@ -155,6 +155,9 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                                     debug_extra = "created_by field present but empty"
                             else:
                                 debug_extra = "created_by field missing from TMDB response"
+                        # ✅ Merge creators into writers (for TV shows)
+                        if creators:
+                            writers.extend([c for c in creators if c not in writers])
                         # directors and writers stay distinct (do NOT merge created_by into directors)
                         orig_directors = list(directors)
                         orig_creators = list(creators)
