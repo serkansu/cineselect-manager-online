@@ -1,9 +1,22 @@
 def clear_filter_if_empty(key):
-    """Resets the filter session state key to None if the associated widget selection is empty."""
+    """Resets the filter session state key to None if the associated widget selection is empty.
+    Also clears the query param for that filter and triggers rerun if actually cleared."""
     val = st.session_state.get(key)
     if not val:
+        was_set = st.session_state.get(key, None) is not None
         st.session_state[key] = None
+        # Clear corresponding query param
+        qp = st.query_params
+        rerun_needed = False
+        if key in ["filter_director", "filter_actor", "filter_genre", "filter_created_by"]:
+            if key in qp:
+                del qp[key]
+                rerun_needed = True
+        # Only rerun if the key was set and got cleared, to avoid infinite loops
+        if was_set or rerun_needed:
+            st.rerun()
 import streamlit as st
+from bs4 import BeautifulSoup
 import urllib.parse
 # --- Query param parsing for single-click filters ---
 # At the top of the script, parse st.query_params and set session_state for filters
@@ -153,6 +166,43 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
+    # --- IMDb full credits fallback if directors is empty or ["Unknown"] ---
+    # Only attempt if both OMDb and TMDB failed to yield real directors
+    # We'll merge into the TMDB result (if present), else meta
+    imdb_fullcredits_result = None
+    def _directors_empty(dlist):
+        return not dlist or (isinstance(dlist, list) and (len(dlist) == 0 or dlist == ["Unknown"]))
+    # Determine which result to patch (TMDB preferred for structure)
+    target_result = tmdb_result if tmdb_result is not None else (omdb_result if omdb_result is not None else None)
+    patch_needed = False
+    if imdb_id:
+        # Check if directors is missing or ["Unknown"]
+        if target_result:
+            if _directors_empty(target_result.get("directors", [])):
+                patch_needed = True
+        else:
+            if _directors_empty(None):
+                patch_needed = True
+    if patch_needed or (not omdb_result and not tmdb_result):
+        try:
+            imdb_fullcredits_result = scrape_imdb_fullcredits(imdb_id)
+            # Only patch if directors found
+            if imdb_fullcredits_result and imdb_fullcredits_result.get("directors"):
+                if target_result is not None:
+                    # Patch into TMDB or OMDb result
+                    target_result["directors"] = imdb_fullcredits_result.get("directors", [])
+                    # Only update cast if original is empty
+                    if not target_result.get("cast"):
+                        target_result["cast"] = imdb_fullcredits_result.get("cast", [])
+                    # Only update genres if original is empty or ["Unknown"]
+                    if _directors_empty(target_result.get("genres", [])):
+                        target_result["genres"] = imdb_fullcredits_result.get("genres", [])
+                else:
+                    # Patch into meta fallback below
+                    tmdb_result = imdb_fullcredits_result
+        except Exception as e:
+            print(f"fetch_metadata IMDb fullcredits scrape error: {e}")
+
     # Merge fetched data, OMDb preferred
     meta = omdb_result or tmdb_result or {
         "directors": ["Unknown"],
@@ -183,6 +233,80 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         return result
     else:
         return meta
+
+
+# --- IMDb Full Credits Scraper Fallback ---
+def scrape_imdb_fullcredits(imdb_id):
+    """
+    Scrape IMDb full credits page for directors and main cast.
+    Returns dict: {'directors': [...], 'cast': [...], 'genres': []}
+    """
+    import requests
+    from bs4 import BeautifulSoup
+    url = f"https://www.imdb.com/title/{imdb_id}/fullcredits"
+    try:
+        resp = requests.get(url, timeout=15)
+        if resp.status_code != 200:
+            return {"directors": [], "cast": [], "genres": []}
+        soup = BeautifulSoup(resp.text, "html.parser")
+        directors = []
+        # Find the Directors section (can be "Directed by" or "Director" or "Directors")
+        # The page has a h4 or h3 with text "Directed by" or "Director(s)"
+        dir_header = None
+        for h in soup.find_all(["h4", "h3"]):
+            if h.get_text(strip=True).lower().startswith("directed by") or h.get_text(strip=True).lower().startswith("director"):
+                dir_header = h
+                break
+        if dir_header:
+            # The directors are in the next sibling table or list
+            sib = dir_header.find_next_sibling()
+            # Sometimes in ul > li > a, sometimes in table
+            if sib:
+                # Try table rows first
+                if sib.name == "table":
+                    for row in sib.find_all("tr"):
+                        for a in row.find_all("a"):
+                            name = a.get_text(strip=True)
+                            if name:
+                                directors.append(name)
+                elif sib.name == "ul":
+                    for li in sib.find_all("li"):
+                        a = li.find("a")
+                        if a:
+                            name = a.get_text(strip=True)
+                            if name:
+                                directors.append(name)
+        # If not found, fallback: look for div with class "credit_summary_item"
+        if not directors:
+            for div in soup.find_all("div", class_="credit_summary_item"):
+                h = div.find(["h4", "h3"])
+                if h and ("Director" in h.get_text(strip=True)):
+                    for a in div.find_all("a"):
+                        name = a.get_text(strip=True)
+                        if name:
+                            directors.append(name)
+        # Remove duplicates
+        directors = list(dict.fromkeys(directors))
+        # --- Cast extraction (main table: table with class "cast_list") ---
+        cast = []
+        cast_table = soup.find("table", class_="cast_list")
+        if cast_table:
+            for row in cast_table.find_all("tr"):
+                # Each row: td with class "primary_photo", next td is actor name
+                tds = row.find_all("td")
+                if len(tds) >= 2:
+                    a = tds[1].find("a")
+                    if a:
+                        name = a.get_text(strip=True)
+                        if name:
+                            cast.append(name)
+                if len(cast) >= 20:
+                    break
+        # Genres: not present on fullcredits page, so leave empty
+        return {"directors": directors, "cast": cast, "genres": []}
+    except Exception as e:
+        print(f"scrape_imdb_fullcredits error: {e}")
+        return {"directors": [], "cast": [], "genres": []}
 
 def backfill_metadata(limit=20):
     db = get_firestore()
