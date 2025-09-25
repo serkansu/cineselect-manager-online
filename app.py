@@ -205,64 +205,48 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
-    # Merge fetched data, OMDb preferred
-    # Only ever include directors, cast, genres, writers (no created_by)
-    if omdb_result or tmdb_result:
-        meta = omdb_result or tmdb_result
-        # Directors: only set if real directors exist (not from created_by)
-        if "directors" not in meta:
-            meta["directors"] = []
-        # If OMDb directors is empty but OMDb writers exist, meta["directors"] stays empty, writers populated
-        if "cast" not in meta:
-            meta["cast"] = []
-        # --- GENRE MERGE LOGIC FIX ---
-        # If OMDb returned genres, keep them, otherwise use TMDB or fallback
-        # Fallback: If TMDb genres are empty/Unknown, use OMDb Genre
-        if not meta.get("genres") or (meta.get("genres") == ["Unknown"]):
-            if omdb_genres:
-                meta["genres"] = omdb_genres
-            else:
-                meta["genres"] = ["Unknown"]
-        # If OMDb result (preferred), ensure genres not lost
-        elif omdb_result and omdb_genres:
-            meta["genres"] = omdb_genres
-        if "writers" not in meta:
-            meta["writers"] = []
-        # --- OMDb writers merge: after OMDb fetch, if OMDb Writer present and not N/A, set meta["writers"] ---
-        try:
-            if 'omdb_data' in locals():
-                if omdb_data.get("Writer") and omdb_data.get("Writer") != "N/A":
-                    meta["writers"] = [w.strip() for w in omdb_data["Writer"].split(",")]
-        except Exception:
-            pass
-        # Fallback to OMDb if TMDB did not provide data
-        try:
-            if 'omdb_data' in locals():
-                print("OMDb fallback triggered for:", meta.get("title", "Unknown"))
-                # Cast
-                if (not meta.get("cast")) and omdb_data.get("Actors"):
-                    meta["cast"] = [a.strip() for a in omdb_data["Actors"].split(",") if a.strip()]
-                # Genres
-                if (not meta.get("genres")) and omdb_data.get("Genre"):
-                    meta["genres"] = [g.strip() for g in omdb_data["Genre"].split(",") if g.strip()]
-                # Writers
-                if (not meta.get("writers")) and omdb_data.get("Writer"):
-                    meta["writers"] = [w.strip() for w in omdb_data["Writer"].split(",") if w.strip()]
-        except Exception:
-            pass
-        # Remove created_by if present (writers is canonical)
-        meta.pop("created_by", None)
-        # If debug_log missing (e.g. OMDb result), add fallback debug_log
-        if "debug_log" not in meta or not meta["debug_log"]:
-            meta["debug_log"] = "No directors/creators found (OMDb+TMDB)"
+    # --- Merge priority: OMDb first, but skip N/A/empty values and fallback to TMDB ---
+    meta = {}
+
+    # Directors
+    if omdb_result and omdb_result.get("directors"):
+        meta["directors"] = omdb_result["directors"]
+    elif tmdb_result and tmdb_result.get("directors"):
+        meta["directors"] = tmdb_result["directors"]
     else:
-        meta = {
-            "directors": [],
-            "cast": [],
-            "genres": ["Unknown"],
-            "writers": [],
-            "debug_log": "No directors/creators found (OMDb+TMDB)",
-        }
+        meta["directors"] = []
+
+    # Cast
+    if omdb_result and omdb_result.get("cast"):
+        meta["cast"] = omdb_result["cast"]
+    elif tmdb_result and tmdb_result.get("cast"):
+        meta["cast"] = tmdb_result["cast"]
+    else:
+        meta["cast"] = []
+
+    # Genres
+    if omdb_result and omdb_result.get("genres"):
+        meta["genres"] = omdb_result["genres"]
+    elif tmdb_result and tmdb_result.get("genres"):
+        meta["genres"] = tmdb_result["genres"]
+    else:
+        meta["genres"] = ["Unknown"]
+
+    # Writers
+    if omdb_result and omdb_result.get("writers"):
+        meta["writers"] = omdb_result["writers"]
+    elif tmdb_result and tmdb_result.get("writers"):
+        meta["writers"] = tmdb_result["writers"]
+    else:
+        meta["writers"] = []
+
+    # Debug log
+    if omdb_result and omdb_result.get("debug_log"):
+        meta["debug_log"] = omdb_result["debug_log"]
+    elif tmdb_result and tmdb_result.get("debug_log"):
+        meta["debug_log"] = tmdb_result["debug_log"]
+    else:
+        meta["debug_log"] = "No directors/creators found (OMDb+TMDB)"
 
     # --- Only fill empty fields; keep existing manual values if present ---
     if existing is not None:
