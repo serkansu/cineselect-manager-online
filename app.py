@@ -1211,41 +1211,69 @@ if media_type == "TV Show":
 if media_type == "TV Show":
     col1, col2, col3, col4 = st.columns(4)
     with col1:
+        default_director = (
+            [st.session_state["filter_director"]]
+            if st.session_state.get("filter_director") in directors
+            else []
+        )
         selected_directors = st.multiselect(
-            "🎬 Filter by Director", directors,
-            default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
+            "🎬 Filter by Director", directors, default=default_director
         )
     with col2:
+        default_actor = (
+            [st.session_state["filter_actor"]]
+            if st.session_state.get("filter_actor") in actors
+            else []
+        )
         selected_actors = st.multiselect(
-            "🎭 Filter by Actor", actors,
-            default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
+            "🎭 Filter by Actor", actors, default=default_actor
         )
     with col3:
+        default_genre = (
+            [st.session_state["filter_genre"]]
+            if st.session_state.get("filter_genre") in genres
+            else []
+        )
         selected_genres = st.multiselect(
-            "🎞 Filter by Genre", genres,
-            default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
+            "🎞 Filter by Genre", genres, default=default_genre
         )
     with col4:
+        default_created_by = (
+            [st.session_state["filter_created_by"]]
+            if st.session_state.get("filter_created_by") in created_by_list
+            else []
+        )
         selected_created_by = st.multiselect(
-            "🎬 Filter by Created by", created_by_list,
-            default=[st.session_state["filter_created_by"]] if st.session_state.get("filter_created_by") else []
+            "🎬 Filter by Created by", created_by_list, default=default_created_by
         )
 else:
     col1, col2, col3 = st.columns(3)
     with col1:
+        default_director = (
+            [st.session_state["filter_director"]]
+            if st.session_state.get("filter_director") in directors
+            else []
+        )
         selected_directors = st.multiselect(
-            "🎬 Filter by Director", directors,
-            default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
+            "🎬 Filter by Director", directors, default=default_director
         )
     with col2:
+        default_actor = (
+            [st.session_state["filter_actor"]]
+            if st.session_state.get("filter_actor") in actors
+            else []
+        )
         selected_actors = st.multiselect(
-            "🎭 Filter by Actor", actors,
-            default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
+            "🎭 Filter by Actor", actors, default=default_actor
         )
     with col3:
+        default_genre = (
+            [st.session_state["filter_genre"]]
+            if st.session_state.get("filter_genre") in genres
+            else []
+        )
         selected_genres = st.multiselect(
-            "🎞 Filter by Genre", genres,
-            default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
+            "🎞 Filter by Genre", genres, default=default_genre
         )
     
 def get_sort_key(fav):
@@ -1262,36 +1290,49 @@ def get_sort_key(fav):
         return 0
 
 def show_favorites(fav_type, label):
-    # --- Filtering logic using session_state (no query_params) ---
-    docs = db.collection("favorites").where("type", "==", fav_type).stream()
-    favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
-    # Apply director filter(s) if selected
-    if selected_directors:
-        favorites = [f for f in favorites if any(d in (f.get("directors") or []) for d in selected_directors)]
-    # Apply actor/cast filter(s) if selected
-    if selected_actors:
-        favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in selected_actors)]
-    # Apply genre filter(s) if selected
-    if selected_genres:
-        favorites = [f for f in favorites if any(g in (f.get("genres", []) or []) for g in selected_genres)]
-    # Apply created_by filter(s) if present (for shows only)
-    if fav_type == "show":
-        # selected_created_by is only defined if media_type == "TV Show"
-        if "selected_created_by" in globals() and selected_created_by:
-            favorites = [f for f in favorites if any(cb in (f.get("created_by") or []) for cb in selected_created_by)]
-    # --- Also support single-click filter by director, actor, genre, created_by via session_state ---
+    # --- Unified filtering logic: apply filters across movies and shows together if any filter is active ---
+    # Gather all favorites if any filter is active, else only per section.
     fd = st.session_state.get("filter_director")
     fa = st.session_state.get("filter_actor")
     fg = st.session_state.get("filter_genre")
     fcb = st.session_state.get("filter_created_by")
-    if fd:
-        favorites = [f for f in favorites if fd in f.get("directors",[])]
-    if fa:
-        favorites = [f for f in favorites if fa in f.get("cast",[])]
-    if fg:
-        favorites = [f for f in favorites if fg in f.get("genres",[])]
-    if fav_type == "show" and fcb:
-        favorites = [f for f in favorites if fcb in (f.get("created_by") or [])]
+    # Combine all selected filters (from multiselects and single-click)
+    any_filter_active = (
+        selected_directors or selected_actors or selected_genres or
+        (fav_type == "show" and "selected_created_by" in globals() and selected_created_by) or
+        fd or fa or fg or (fav_type == "show" and fcb)
+    )
+    # If any filter is active, fetch all movies+shows together, else only current section
+    if any_filter_active:
+        # Get all favorites
+        all_favs = [doc.to_dict() for doc in db.collection("favorites").stream()]
+        # Apply filters
+        filtered = all_favs
+        # Multiselects
+        if selected_directors:
+            filtered = [f for f in filtered if any(d in (f.get("directors") or []) for d in selected_directors)]
+        if selected_actors:
+            filtered = [f for f in filtered if any(a in (f.get("cast") or []) for a in selected_actors)]
+        if selected_genres:
+            filtered = [f for f in filtered if any(g in (f.get("genres", []) or []) for g in selected_genres)]
+        # created_by only for shows
+        if "selected_created_by" in globals() and selected_created_by:
+            filtered = [f for f in filtered if any(cb in (f.get("created_by") or []) for cb in selected_created_by)]
+        # Single-click session_state filters
+        if fd:
+            filtered = [f for f in filtered if fd in f.get("directors",[])]
+        if fa:
+            filtered = [f for f in filtered if fa in f.get("cast",[])]
+        if fg:
+            filtered = [f for f in filtered if fg in f.get("genres",[])]
+        if fcb:
+            filtered = [f for f in filtered if fcb in (f.get("created_by") or [])]
+        # Now, split back by type
+        favorites = [f for f in filtered if (f.get("type", "").lower() == fav_type)]
+        favorites = sorted(favorites, key=get_sort_key, reverse=True)
+    else:
+        docs = db.collection("favorites").where("type", "==", fav_type).stream()
+        favorites = sorted([doc.to_dict() for doc in docs], key=get_sort_key, reverse=True)
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
@@ -1339,9 +1380,9 @@ def show_favorites(fav_type, label):
                 if fav.get("created_by"):
                     link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
                 elif fav.get("directors"):
-                    link_list(fav["directors"], "director", "🎬", "Directors")
+                    link_list(fav.get("directors", []), "director", "🎬", "Directors")
             elif fav.get("directors"):
-                link_list(fav["directors"], "director", "🎬", "Directors")
+                link_list(fav.get("directors", []), "director", "🎬", "Directors")
             # Cast
             if fav.get("cast"):
                 link_list(fav["cast"], "actor", "🎭", "Cast")
