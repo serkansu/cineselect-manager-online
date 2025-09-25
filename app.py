@@ -102,7 +102,7 @@ def read_seed_meta(imdb_id: str):
     return None
 
 @st.cache_data(show_spinner=False)
-def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=None):
+def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=None, scraping_enabled=False):
     """
     OMDb öncelikli, gerekirse TMDB fallback ile metadata getirir.
     Yalnızca Firestore'daki mevcut (manuel) değerleri BOŞ olan alanları doldurur.
@@ -178,6 +178,66 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         }
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
+
+    # IMDb scraping fallback (only if explicitly enabled)
+    if scraping_enabled:
+        # Try to extract directors and cast if not already found
+        # Only if directors is empty or ["Unknown"]
+        directors = None
+        cast = None
+        genres = None
+        # Try to get from tmdb_result or omdb_result
+        if tmdb_result:
+            directors = tmdb_result.get("directors", [])
+            cast = tmdb_result.get("cast", [])
+            genres = tmdb_result.get("genres", [])
+        elif omdb_result:
+            directors = omdb_result.get("directors", [])
+            cast = omdb_result.get("cast", [])
+            genres = omdb_result.get("genres", [])
+        else:
+            directors = []
+            cast = []
+            genres = []
+        # Only scrape if directors is empty or ["Unknown"]
+        if not directors or (isinstance(directors, list) and (len(directors) == 0 or directors == ["Unknown"])):
+            try:
+                import requests
+                from bs4 import BeautifulSoup
+                imdb_url = f"https://www.imdb.com/title/{imdb_id}/fullcredits/?ref_=tt_cl_sm"
+                resp = requests.get(imdb_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, "html.parser")
+                    # Directors
+                    dir_header = soup.find("h4", string=lambda t: t and "Directed by" in t)
+                    if dir_header:
+                        dir_table = dir_header.find_next("table")
+                        if dir_table:
+                            directors = [a.get_text(strip=True) for a in dir_table.select("td.name a")]
+                    # Created by (TV shows)
+                    created_by_header = soup.find("h4", string=lambda t: t and "Series Directed by" in t)
+                    if created_by_header:
+                        dir_table = created_by_header.find_next("table")
+                        if dir_table:
+                            if directors is None:
+                                directors = []
+                            directors.extend([a.get_text(strip=True) for a in dir_table.select("td.name a")])
+                    # Cast
+                    cast_header = soup.find("h4", string=lambda t: t and "Cast" in t)
+                    if cast_header:
+                        cast_table = cast_header.find_next("table")
+                        if cast_table:
+                            cast = [a.get_text(strip=True) for a in cast_table.select("td.primary_photo + td a")][:10]
+            except Exception as e:
+                print("IMDb scraping error:", e)
+        # Ensure directors/cast/genres are not None
+        if directors is None:
+            directors = []
+        if cast is None:
+            cast = []
+        if genres is None:
+            genres = []
+        return {"directors": directors or ["Unknown"], "cast": cast or [], "genres": genres or ["Unknown"]}
 
     # --- IMDb full credits fallback if directors is empty or ["Unknown"] ---
     # Only attempt if both OMDb and TMDB failed to yield real directors
@@ -1248,7 +1308,7 @@ if query:
                 rt_score    = int(stats.get("rt") or 0)
 
                 # --- Fetch full metadata (directors, cast, genres) ---
-                new_meta = fetch_metadata(imdb_id, item["title"], item.get("year"), is_series=(media_key == "show"))
+                new_meta = fetch_metadata(imdb_id, item["title"], item.get("year"), is_series=(media_key == "show"), scraping_enabled=True)
 
                 # 🔎 DEBUG: Kaynak ve ham yanıtlar
                 st.write(f"🔍 Source: {source or '—'} | 🆔 IMDb ID: {imdb_id or '—'} | ⭐ IMDb: {imdb_rating} | 🍅 RT: {rt_score}")
@@ -1648,7 +1708,7 @@ def show_favorites(fav_type, label):
                     year = fav.get("year")
                     is_series = (fav.get("type") == "show")
 
-                    new_meta = fetch_metadata(imdb_id, title, year, is_series=is_series)
+                    new_meta = fetch_metadata(imdb_id, title, year, is_series=is_series, scraping_enabled=True)
                     if new_meta:
                         update_data = {
                             "directors": new_meta.get("directors", []),
