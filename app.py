@@ -1293,31 +1293,26 @@ if media_type == "TV Show":
 
 ## --- Unified filter row (stateless, no query_params) ---
 if media_type == "TV Show":
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         selected_directors = st.multiselect(
             "🎬 Filter by Director", directors,
             default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
         )
     with col2:
+        selected_writers = st.multiselect(
+            "✍️ Filter by Writer", writers,
+            default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
+        )
+    with col3:
         selected_actors = st.multiselect(
             "🎭 Filter by Actor", actors,
             default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
         )
-    with col3:
+    with col4:
         selected_genres = st.multiselect(
             "🎞 Filter by Genre", genres,
             default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
-        )
-    with col4:
-        selected_created_by = st.multiselect(
-            "🎬 Filter by Created by", created_by_list,
-            default=[st.session_state["filter_created_by"]] if st.session_state.get("filter_created_by") else []
-        )
-    with col5:
-        selected_writers = st.multiselect(
-            "✍️ Filter by Writer", writers,
-            default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
         )
 else:
     col1, col2, col3, col4 = st.columns(4)
@@ -1433,14 +1428,10 @@ def show_favorites(fav_type, label):
                 ]
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
-            # Directors
-            if fav.get("directors"):
+            # Directors or Writers display
+            if fav.get("directors") and fav["directors"] != ["Unknown"]:
                 link_list(fav["directors"], "director", "🎬", "Directors")
-            # Writers
-            if fav.get("writers"):
-                link_list(fav["writers"], "writer", "✍️", "Writers")
-            # Writers
-            if fav.get("writers"):
+            elif fav.get("writers"):
                 link_list(fav["writers"], "writer", "✍️", "Writers")
             # Cast
             if fav.get("cast"):
