@@ -1462,6 +1462,11 @@ def show_favorites(fav_type, label):
                             update_data["created_by"] = []
                         db.collection("favorites").document(fav["id"]).update(update_data)
                         append_seed_meta(imdb_id, title, year, new_meta)
+                        # Show debug log if available
+                        if new_meta.get("debug_log"):
+                            st.caption(f"DEBUG (directors/creators): {new_meta['debug_log']}")
+                        else:
+                            st.caption("DEBUG: No debug_log returned from fetch_metadata")
                         st.success(f"✅ Metadata updated for {title} ({year})")
                         st.rerun()
         with cols[2]:
