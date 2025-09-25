@@ -93,7 +93,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     cast = [x.strip() for x in (d.get("Actors") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     if directors or cast or genres:
-                        omdb_result = {"directors": directors, "cast": cast, "genres": genres}
+                        omdb_result = {"directors": directors, "cast": cast, "genres": genres, "debug_log": "Directors from OMDb"}
     except Exception as e:
         print("fetch_metadata OMDb error:", e)
 
@@ -123,17 +123,20 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         creators = []
                         if search_type == "tv":
                             creators = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
-                        # Merge directors and creators
-                        directors = directors + creators
-                        directors = list({d for d in directors if d})
+                        # Merge directors and creators, and track origin for debug_log
+                        orig_directors = list(directors)  # directors from crew
+                        orig_creators = list(creators)    # creators from created_by
+                        directors = list({d for d in directors + creators if d})
                         # --- DEBUG LOGGING for directors/creators ---
                         debug_log = ""
-                        if directors and creators and len(creators) > 0:
-                            debug_log = "Creators merged from TMDB created_by"
-                        elif directors and not creators and len(directors) > 0:
+                        if orig_directors and orig_creators:
+                            debug_log = f"Directors from TMDB crew + Creators from TMDB created_by ({', '.join(orig_creators)})"
+                        elif orig_directors and not orig_creators:
                             debug_log = "Directors found in TMDB crew"
+                        elif orig_creators and not orig_directors:
+                            debug_log = f"Creators only from TMDB created_by ({', '.join(orig_creators)})"
                         else:
-                            debug_log = "No directors/creators found"
+                            debug_log = "No directors/creators found in TMDB"
                         # Insert debug_log as a key in the result
                         if not directors:
                             directors = ["Unknown"]
@@ -162,15 +165,15 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
             meta["genres"] = ["Unknown"]
         # Remove created_by if present
         meta.pop("created_by", None)
-        # If debug_log missing (e.g. OMDb result), add "No directors/creators found"
-        if "debug_log" not in meta:
-            meta["debug_log"] = "No directors/creators found"
+        # If debug_log missing (e.g. OMDb result), add fallback debug_log
+        if "debug_log" not in meta or not meta["debug_log"]:
+            meta["debug_log"] = "No directors/creators found (OMDb+TMDB)"
     else:
         meta = {
             "directors": ["Unknown"],
             "cast": [],
             "genres": ["Unknown"],
-            "debug_log": "No directors/creators found",
+            "debug_log": "No directors/creators found (OMDb+TMDB)",
         }
 
     # --- Only fill empty fields; keep existing manual values if present ---
