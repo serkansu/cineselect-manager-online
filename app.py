@@ -118,41 +118,45 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         # Genres
                         genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
                         # Directors
-                        directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
-                        # Cast (ilk 8 kişi)
-                        cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # Always gather created_by for TV shows
-                        created_by = []
+                        directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")]
+                        # Created_by (only for TV shows)
+                        creators = []
                         if search_type == "tv":
-                            created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
+                            creators = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
+                        # Merge directors and creators
+                        directors = directors + creators
+                        directors = list({d for d in directors if d})
                         if not directors:
                             directors = ["Unknown"]
+                        # Cast (ilk 8 kişi)
+                        cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
                         if not genres:
                             genres = ["Unknown"]
                         tmdb_result = {
                             "directors": directors,
                             "cast": cast,
                             "genres": genres,
-                            "created_by": created_by
                         }
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
     # Merge fetched data, OMDb preferred
-    # Ensure meta always has both "directors" and "created_by"
+    # Only ever include directors, cast, genres (no created_by)
     if omdb_result or tmdb_result:
         meta = omdb_result or tmdb_result
-        # Ensure both keys exist
         if "directors" not in meta:
             meta["directors"] = ["Unknown"]
-        if "created_by" not in meta:
-            meta["created_by"] = []
+        if "cast" not in meta:
+            meta["cast"] = []
+        if "genres" not in meta:
+            meta["genres"] = ["Unknown"]
+        # Remove created_by if present
+        meta.pop("created_by", None)
     else:
         meta = {
             "directors": ["Unknown"],
             "cast": [],
             "genres": ["Unknown"],
-            "created_by": []
         }
 
     # --- Only fill empty fields; keep existing manual values if present ---
@@ -172,8 +176,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
-        # Always propagate created_by (from meta) for TV shows; for movies, just keep as empty or as in meta
-        result["created_by"] = meta.get("created_by", [])
+        # Do not include created_by in the result
         return result
     else:
         return meta
