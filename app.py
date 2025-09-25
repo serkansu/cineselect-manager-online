@@ -126,6 +126,15 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         # Merge directors and creators
                         directors = directors + creators
                         directors = list({d for d in directors if d})
+                        # --- DEBUG LOGGING for directors/creators ---
+                        debug_log = ""
+                        if directors and creators and len(creators) > 0:
+                            debug_log = "Creators merged from TMDB created_by"
+                        elif directors and not creators and len(directors) > 0:
+                            debug_log = "Directors found in TMDB crew"
+                        else:
+                            debug_log = "No directors/creators found"
+                        # Insert debug_log as a key in the result
                         if not directors:
                             directors = ["Unknown"]
                         # Cast (ilk 8 kişi)
@@ -136,6 +145,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                             "directors": directors,
                             "cast": cast,
                             "genres": genres,
+                            "debug_log": debug_log,
                         }
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
@@ -152,11 +162,15 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
             meta["genres"] = ["Unknown"]
         # Remove created_by if present
         meta.pop("created_by", None)
+        # If debug_log missing (e.g. OMDb result), add "No directors/creators found"
+        if "debug_log" not in meta:
+            meta["debug_log"] = "No directors/creators found"
     else:
         meta = {
             "directors": ["Unknown"],
             "cast": [],
             "genres": ["Unknown"],
+            "debug_log": "No directors/creators found",
         }
 
     # --- Only fill empty fields; keep existing manual values if present ---
@@ -176,6 +190,9 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
+        # Also copy debug_log if present in meta
+        if "debug_log" in meta:
+            result["debug_log"] = meta["debug_log"]
         # Do not include created_by in the result
         return result
     else:
@@ -1357,6 +1374,9 @@ def show_favorites(fav_type, label):
             # Genres
             if fav.get("genres"):
                 link_list(fav["genres"], "genre", "📚", "Genres")
+            # --- TEMPORARY DEBUG LOG for directors/creators origin ---
+            if fav.get("debug_log"):
+                st.caption(f"DEBUG: {fav['debug_log']}")  # TEMP log for directors/creators info
 
             # --- IMDb&RT ve Full Meta butonlarını yan yana ve küçük göster ---
             btn_cols = st.columns([1, 1])
