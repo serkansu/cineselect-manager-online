@@ -7,7 +7,7 @@ for param, sskey in [
     ("filter_director", "filter_director"),
     ("filter_actor", "filter_actor"),
     ("filter_genre", "filter_genre"),
-    ("filter_created_by", "filter_created_by"),
+    # ("filter_created_by", "filter_created_by"),  # Removed for writers
     ("filter_writer", "filter_writer"),  # Added for writers
 ]:
     val = qp.get(param)
@@ -96,7 +96,16 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     writers = [x.strip() for x in (d.get("Writer") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     omdb_genres = genres
-                    if directors or cast or genres or writers:
+                    # If OMDb returns no directors but writers exist, set writers only
+                    if (not directors) and writers:
+                        omdb_result = {
+                            "directors": [],
+                            "cast": cast,
+                            "genres": genres,
+                            "writers": writers,
+                            "debug_log": "Writers from OMDb (no directors)"
+                        }
+                    elif directors or cast or genres or writers:
                         omdb_result = {
                             "directors": directors,
                             "cast": cast,
@@ -127,15 +136,14 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         det = d_resp.json()
                         # Genres
                         genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
-                        # Directors
+                        # Directors (from crew)
                         directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")]
                         # Writers (from crew, job == "Writer")
                         writers = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Writer" and c.get("name")]
-                        # Created_by (only for TV shows)
+                        # Created_by (for TV shows only)
                         creators = []
                         debug_extra = None
                         if search_type == "tv":
-                            # Improved created_by handling
                             if "created_by" in det:
                                 if det.get("created_by"):
                                     creators = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
@@ -147,11 +155,9 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                                     debug_extra = "created_by field present but empty"
                             else:
                                 debug_extra = "created_by field missing from TMDB response"
-                        # For TV, creators are NOT merged into directors or writers anymore
-                        orig_directors = list(directors)  # directors from crew
-                        orig_creators = list(creators)    # creators from created_by
-                        # directors and writers stay distinct
-                        # --- DEBUG LOGGING for directors/creators origin ---
+                        # directors and writers stay distinct (do NOT merge created_by into directors)
+                        orig_directors = list(directors)
+                        orig_creators = list(creators)
                         debug_log = ""
                         if search_type == "tv":
                             if orig_directors and orig_creators:
@@ -170,15 +176,13 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         # Append debug_extra to debug_log if defined
                         if debug_extra:
                             debug_log = debug_log + " | " + debug_extra if debug_log else debug_extra
-                        # Insert debug_log as a key in the result
-                        if not directors:
-                            directors = ["Unknown"]
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
                         if not genres:
                             genres = ["Unknown"]
+                        # Only assign directors if real directors exist (from crew)
                         tmdb_result = {
-                            "directors": directors,
+                            "directors": directors if directors else [],
                             "cast": cast,
                             "genres": genres,
                             "writers": writers,
@@ -191,13 +195,16 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     # Only ever include directors, cast, genres, writers (no created_by)
     if omdb_result or tmdb_result:
         meta = omdb_result or tmdb_result
+        # Directors: only set if real directors exist (not from created_by)
         if "directors" not in meta:
-            meta["directors"] = ["Unknown"]
+            meta["directors"] = []
+        # If OMDb directors is empty but OMDb writers exist, meta["directors"] stays empty, writers populated
         if "cast" not in meta:
             meta["cast"] = []
         # --- GENRE MERGE LOGIC FIX ---
         # If OMDb returned genres, keep them, otherwise use TMDB or fallback
-        if "genres" not in meta or not meta["genres"]:
+        # Fallback: If TMDb genres are empty/Unknown, use OMDb Genre
+        if not meta.get("genres") or (meta.get("genres") == ["Unknown"]):
             if omdb_genres:
                 meta["genres"] = omdb_genres
             else:
@@ -214,7 +221,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
             meta["debug_log"] = "No directors/creators found (OMDb+TMDB)"
     else:
         meta = {
-            "directors": ["Unknown"],
+            "directors": [],
             "cast": [],
             "genres": ["Unknown"],
             "writers": [],
@@ -1287,50 +1294,27 @@ else:
 writers = sorted({w for doc in source_docs for w in (doc.to_dict().get("writers") or [])})
 ## --- Unified filter row (stateless, no query_params) ---
 # Remove "Filter by Created by" entirely; update order: Director, Writer, Actor, Genre
-if media_type == "TV Show":
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        selected_directors = st.multiselect(
-            "🎬 Filter by Director", directors,
-            default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
-        )
-    with col2:
-        selected_writers = st.multiselect(
-            "✍️ Filter by Writer", writers,
-            default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
-        )
-    with col3:
-        selected_actors = st.multiselect(
-            "🎭 Filter by Actor", actors,
-            default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
-        )
-    with col4:
-        selected_genres = st.multiselect(
-            "🎞 Filter by Genre", genres,
-            default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
-        )
-elif media_type == "Movie":
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        selected_directors = st.multiselect(
-            "🎬 Filter by Director", directors,
-            default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
-        )
-    with col2:
-        selected_writers = st.multiselect(
-            "✍️ Filter by Writer", writers,
-            default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
-        )
-    with col3:
-        selected_actors = st.multiselect(
-            "🎭 Filter by Actor", actors,
-            default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
-        )
-    with col4:
-        selected_genres = st.multiselect(
-            "🎞 Filter by Genre", genres,
-            default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
-        )
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    selected_directors = st.multiselect(
+        "🎬 Filter by Director", directors,
+        default=[st.session_state["filter_director"]] if st.session_state.get("filter_director") else []
+    )
+with col2:
+    selected_writers = st.multiselect(
+        "✍️ Filter by Writer", writers,
+        default=[st.session_state["filter_writer"]] if st.session_state.get("filter_writer") else []
+    )
+with col3:
+    selected_actors = st.multiselect(
+        "🎭 Filter by Actor", actors,
+        default=[st.session_state["filter_actor"]] if st.session_state.get("filter_actor") else []
+    )
+with col4:
+    selected_genres = st.multiselect(
+        "🎞 Filter by Genre", genres,
+        default=[st.session_state["filter_genre"]] if st.session_state.get("filter_genre") else []
+    )
 def get_sort_key(fav):
     try:
         if sort_option == "IMDb":
@@ -1351,36 +1335,28 @@ def show_favorites(fav_type, label):
     # Apply director filter(s) if selected
     if selected_directors:
         favorites = [f for f in favorites if any(d in (f.get("directors") or []) for d in selected_directors)]
+    # Apply writers filter(s) if selected
+    if selected_writers:
+        favorites = [f for f in favorites if any(w in (f.get("writers") or []) for w in selected_writers)]
     # Apply actor/cast filter(s) if selected
     if selected_actors:
         favorites = [f for f in favorites if any(a in (f.get("cast") or []) for a in selected_actors)]
     # Apply genre filter(s) if selected
     if selected_genres:
         favorites = [f for f in favorites if any(g in (f.get("genres", []) or []) for g in selected_genres)]
-    # Apply writers filter(s) if selected
-    if selected_writers:
-        favorites = [f for f in favorites if any(w in (f.get("writers") or []) for w in selected_writers)]
-    # Apply created_by filter(s) if present (for shows only)
-    if fav_type == "show":
-        # selected_created_by is only defined if media_type == "TV Show"
-        if "selected_created_by" in globals() and selected_created_by:
-            favorites = [f for f in favorites if any(cb in (f.get("created_by") or []) for cb in selected_created_by)]
-    # --- Also support single-click filter by director, actor, genre, created_by, writer via session_state ---
+    # --- Also support single-click filter by director, writer, actor, genre via session_state ---
     fd = st.session_state.get("filter_director")
+    fw = st.session_state.get("filter_writer")
     fa = st.session_state.get("filter_actor")
     fg = st.session_state.get("filter_genre")
-    fcb = st.session_state.get("filter_created_by")
-    fw = st.session_state.get("filter_writer")
     if fd:
         favorites = [f for f in favorites if fd in f.get("directors",[])]
+    if fw:
+        favorites = [f for f in favorites if fw in (f.get("writers") or [])]
     if fa:
         favorites = [f for f in favorites if fa in f.get("cast",[])]
     if fg:
         favorites = [f for f in favorites if fg in f.get("genres",[])]
-    if fw:
-        favorites = [f for f in favorites if fw in (f.get("writers") or [])]
-    if fav_type == "show" and fcb:
-        favorites = [f for f in favorites if fcb in (f.get("created_by") or [])]
 
     st.markdown(f"### 📁 {label}")
     for idx, fav in enumerate(favorites):
@@ -1424,9 +1400,10 @@ def show_favorites(fav_type, label):
                 st.markdown(f"{emoji} <b>{label}:</b> " + " ".join(links), unsafe_allow_html=True)
 
             # Directors or Writers display
-            if fav.get("directors") and fav["directors"] != ["Unknown"]:
+            # Show directors if present and non-empty, else (if no directors but writers) show writers
+            if fav.get("directors") and fav["directors"] and fav["directors"] != ["Unknown"]:
                 link_list(fav["directors"], "director", "🎬", "Directors")
-            elif fav.get("writers"):
+            elif (not fav.get("directors") or fav.get("directors") == [] or fav.get("directors") == ["Unknown"]) and fav.get("writers"):
                 link_list(fav["writers"], "writer", "✍️", "Writers")
             # Cast
             if fav.get("cast"):
