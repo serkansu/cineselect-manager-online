@@ -153,7 +153,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         # For TV shows, always set created_by from det["created_by"], and merge with all directors from crew
                         if search_type in ["tv", "show"]:
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
-                            all_directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
+                            all_directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")]
                             # Merge created_by and directors, preserving order and removing duplicates
                             merged_creators = []
                             seen = set()
@@ -161,8 +161,9 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                                 if name and name not in seen:
                                     merged_creators.append(name)
                                     seen.add(name)
+                            # Always set both created_by and directors to merged list for TV shows
                             created_by = merged_creators
-                            directors = merged_creators  # for backward compatibility if needed
+                            directors = merged_creators
                         else:
                             created_by = []
                             directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
@@ -283,6 +284,19 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         "genres": ["Unknown"],
         "created_by": []
     }
+    # For TV shows, ensure both 'created_by' and 'directors' are present and consistent if either exists
+    if (is_series or (meta.get("created_by") or []) or (meta.get("directors") or [])) and ("created_by" in meta or "directors" in meta):
+        cb = meta.get("created_by", [])
+        dirs = meta.get("directors", [])
+        # For TV, always merge both
+        merged = []
+        seen = set()
+        for name in cb + dirs:
+            if name and name not in seen:
+                merged.append(name)
+                seen.add(name)
+        meta["created_by"] = merged
+        meta["directors"] = merged
 
     # --- Only fill empty fields; keep existing manual values if present ---
     if existing is not None:
@@ -541,6 +555,7 @@ from omdb import fetch_ratings
 import csv
 from pathlib import Path
 SEED_META_PATH = Path(__file__).parent / "seed_meta.csv"
+# --- Safe Firebase initialization ---
 import requests
 import firebase_admin
 import base64
@@ -548,6 +563,13 @@ from firebase_admin import credentials, firestore
 import json
 import os
 import time
+# --- Safe Firebase initialization ---
+if not firebase_admin._apps:
+    try:
+        cred = credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred)
+    except Exception as e:
+        print(f"Firebase init error (ignored if already initialized): {e}")
 # ---------- Sorting helpers for Streamio export ----------
 ROMAN_MAP = {
     "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
@@ -1524,6 +1546,7 @@ def show_favorites(fav_type, label):
         st.session_state["filter_genre"] = None
     if fav_type == "show" and "selected_created_by" in globals() and not selected_created_by:
         st.session_state["filter_created_by"] = None
+    # Always call clear_filter_if_empty for all filter types to ensure state is reset when cleared
     clear_filter_if_empty("filter_director")
     clear_filter_if_empty("filter_actor")
     clear_filter_if_empty("filter_genre")
