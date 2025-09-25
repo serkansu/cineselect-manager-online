@@ -3,12 +3,13 @@ def clear_filter_if_empty(key):
     Also clears the query param for that filter and triggers rerun if actually cleared.
     Additionally, if no filter is active after clearing, resets all query params and reruns to show the full list."""
     val = st.session_state.get(key)
+    # If the widget selection is empty (e.g. user clicked ❌), clear session state and query param
     if not val:
         was_set = st.session_state.get(key, None) is not None
         st.session_state[key] = None
-        # Clear corresponding query param
         qp = st.query_params
         rerun_needed = False
+        # Remove the filter key from query params if present
         if key in ["filter_director", "filter_actor", "filter_genre", "filter_created_by"]:
             if key in qp:
                 del qp[key]
@@ -16,13 +17,15 @@ def clear_filter_if_empty(key):
         # Only rerun if the key was set and got cleared, to avoid infinite loops
         if was_set or rerun_needed:
             st.rerun()
-        # After rerun, if no filter is active, clear all query params and rerun again to fully reset
+        # After rerun, check if any filter is still active; if not, clear ALL query params and rerun
+        # (Do this only if all filter keys are empty or None)
         if not any([
             st.session_state.get("filter_director"),
             st.session_state.get("filter_actor"),
             st.session_state.get("filter_genre"),
             st.session_state.get("filter_created_by")
         ]):
+            # Clear all query params (reset URL to base)
             st.query_params.clear()
             st.rerun()
 import streamlit as st
