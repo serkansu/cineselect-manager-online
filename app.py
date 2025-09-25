@@ -289,38 +289,22 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         result = {}
         for field in ("directors", "cast", "genres", "writers"):
             existing_val = existing.get(field)
-            # For directors and genres: treat as empty only if missing, [], or all elements are "N/A"/"Unknown"
-            if field in ("directors", "genres"):
-                is_empty = (
-                    not existing_val
-                    or (isinstance(existing_val, list) and (
-                        len(existing_val) == 0
-                        or all(
-                            (str(x or "").strip().lower() in ("n/a", "unknown"))
-                            for x in existing_val
-                        )
-                    ))
+
+            def _all_invalid(val_list):
+                return all(
+                    (str(x or "").strip().lower() in ("n/a", "unknown", "none", ""))
+                    for x in val_list
                 )
-                if is_empty:
-                    result[field] = meta.get(field, [])
-                else:
-                    result[field] = existing_val
-            # For cast and writers: treat as empty only if missing, [], or all elements are "N/A"
-            elif field in ("cast", "writers"):
-                is_empty = (
-                    not existing_val
-                    or (isinstance(existing_val, list) and (
-                        len(existing_val) == 0
-                        or all(
-                            (str(x or "").strip().lower() == "n/a")
-                            for x in existing_val
-                        )
-                    ))
-                )
-                if is_empty:
-                    result[field] = meta.get(field, [])
-                else:
-                    result[field] = existing_val
+
+            is_empty = (
+                not existing_val
+                or (isinstance(existing_val, list) and (len(existing_val) == 0 or _all_invalid(existing_val)))
+            )
+
+            if is_empty:
+                result[field] = meta.get(field, [])
+            else:
+                result[field] = existing_val
         if "debug_log" in meta:
             result["debug_log"] = meta["debug_log"]
         return result
