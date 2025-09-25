@@ -83,7 +83,6 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     omdb_result = None
     tmdb_result = None
     omdb_genres = []
-    # 1) OMDb
     try:
         omdb_key = os.getenv("OMDB_API_KEY")
         if omdb_key and imdb_id:
@@ -97,7 +96,6 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     writers = [x.strip() for x in (d.get("Writer") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     omdb_genres = genres
-                    # If OMDb returns no directors but writers exist, set writers only
                     if (not directors) and writers:
                         omdb_result = {
                             "directors": [],
@@ -114,13 +112,10 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                             "writers": writers,
                             "debug_log": "Directors from OMDb"
                         }
-                    # --- Add OMDb writers to meta if present and not "N/A" ---
-                    # This is for the merge below, not for omdb_result itself
                     omdb_data = d
     except Exception as e:
         print("fetch_metadata OMDb error:", e)
 
-    # 2) TMDB fallback (geliştirilmiş)
     try:
         tmdb_key = os.getenv("TMDB_API_KEY")
         if tmdb_key and imdb_id:
@@ -133,18 +128,13 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                 if results:
                     tmdb_id = results[0].get("id")
                     search_type = "movie" if j.get("movie_results") else "tv"
-                    # 🔑 detayları credits ile birlikte al
                     details_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}"
                     d_resp = requests.get(details_url, params={"api_key": tmdb_key, "append_to_response": "credits"}, timeout=12)
                     if d_resp.status_code == 200:
                         det = d_resp.json()
-                        # Genres
                         genres = [g.get("name") for g in det.get("genres", []) if g.get("name")]
-                        # Directors (from crew)
                         directors = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")]
-                        # Writers (from crew, job == "Writer")
                         writers = [c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Writer" and c.get("name")]
-                        # Created_by (for TV shows only)
                         creators = []
                         debug_extra = None
                         if search_type == "tv":
@@ -159,10 +149,8 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                                     debug_extra = "created_by field present but empty"
                             else:
                                 debug_extra = "created_by field missing from TMDB response"
-                        # --- Place created_by into writers (not directors) ---
                         if creators:
                             writers.extend([c for c in creators if c not in writers])
-                        # Only assign directors if real directors exist (from crew)
                         orig_directors = list(directors)
                         orig_creators = list(creators)
                         debug_log = ""
@@ -180,24 +168,20 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                                 debug_log = "Directors found in TMDB crew"
                             else:
                                 debug_log = "No directors found in TMDB"
-                        # Append debug_extra to debug_log if defined
                         if debug_extra:
                             debug_log = debug_log + " | " + debug_extra if debug_log else debug_extra
-                        # Cast (ilk 8 kişi)
-                        cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
+                        cast = [c for c in det.get("credits", {}).get("cast", [])][:8]
                         if not genres:
                             genres = ["Unknown"]
-                        # Only assign directors if real directors exist (from crew)
                         tmdb_result = {
                             "directors": directors if directors else [],
                             "cast": cast,
                             "genres": genres,
                             "writers": writers,
                             "debug_log": debug_log,
+                            "created_by": det.get("created_by", []),
                         }
-                        # --- If "created_by" present, also add to writers (for explicitness, even if not crew) ---
                         if det.get("created_by"):
-                            # Add created_by names to writers if not already present
                             for c in det["created_by"]:
                                 n = c.get("name")
                                 if n and n not in tmdb_result["writers"]:
@@ -205,63 +189,62 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
-    # --- Merge priority: OMDb first, but skip N/A/empty values and fallback to TMDB ---
-    meta = {}
+    # --- Unified merge logic for directors, writers, cast, genres ---
+    def merge_field(omdb_val, tmdb_val):
+        # Normalize inputs into lists
+        def normalize(val):
+            if not val:
+                return []
+            if isinstance(val, str):
+                if val.strip().lower() in ["n/a", "unknown", "none"]:
+                    return []
+                return [v.strip() for v in val.split(",") if v.strip()]
+            if isinstance(val, list):
+                return [v.strip() for v in val if v and v.strip().lower() not in ["n/a", "unknown", "none"]]
+            return []
+        omdb_list = normalize(omdb_val)
+        tmdb_list = normalize(tmdb_val)
+        if omdb_list and tmdb_list:
+            merged = omdb_list + [x for x in tmdb_list if x not in omdb_list]
+            return merged
+        elif omdb_list:
+            return omdb_list
+        elif tmdb_list:
+            return tmdb_list
+        else:
+            return []
 
-    # OMDb raw data, if available
+    # OMDb/TMDb raw data
     omdb_data = None
     if 'omdb_data' in locals():
         omdb_data = locals().get('omdb_data')
     elif 'd' in locals():
         omdb_data = locals().get('d')
-    # But actually, above OMDb fetch block sets omdb_data = d if OMDb found.
-
-    # TMDb result (dict)
     tmdb_data = tmdb_result if tmdb_result else {}
 
-    # Writers (merge OMDb and TMDb, dedup, preserve order)
-    omdb_writer = omdb_data.get("Writer") if omdb_data else None
-    tmdb_writers = tmdb_data.get("writers", [])
-    # OMDb writers
-    omdb_writers = []
-    if omdb_writer and omdb_writer != "N/A":
-        omdb_writers = [w.strip() for w in omdb_writer.split(",") if w.strip() and w.strip() != "N/A"]
-    # Merge OMDb + TMDb writers (preserve OMDb order, then TMDb, dedup)
-    writers_merged = list(dict.fromkeys(omdb_writers + tmdb_writers))
-    # If still empty, try created_by from TMDb (for TV shows)
-    if not writers_merged and tmdb_data.get("created_by"):
-        writers_merged = [c["name"] for c in tmdb_data["created_by"] if c.get("name")]
-    meta["writers"] = writers_merged
-
-    # Directors (merge OMDb and TMDb, dedup, preserve order)
-    omdb_director = omdb_data.get("Director") if omdb_data else None
-    tmdb_directors = tmdb_data.get("directors", [])
-    omdb_directors = []
-    if omdb_director and omdb_director != "N/A":
-        omdb_directors = [d.strip() for d in omdb_director.split(",") if d.strip() and d.strip() != "N/A"]
-    # Merge OMDb + TMDb directors (preserve OMDb order, then TMDb, dedup)
-    directors_merged = list(dict.fromkeys(omdb_directors + tmdb_directors))
-    # If still empty, try "crew" for directors in TMDb
-    if not directors_merged and "crew" in tmdb_data:
-        directors_merged = [c["name"] for c in tmdb_data["crew"] if c.get("job") == "Director" and c.get("name")]
-    meta["directors"] = directors_merged
-
-    # Cast (merge OMDb + TMDb)
-    tmdb_cast = tmdb_data.get("cast", [])  # already a list of strings
-    omdb_cast = []
-    if omdb_data and omdb_data.get("Actors") and omdb_data["Actors"] != "N/A":
-        omdb_cast = [a.strip() for a in omdb_data["Actors"].split(",")]
-    combined_cast = list(dict.fromkeys(tmdb_cast + omdb_cast))[:10]  # merge, deduplicate, limit
-    meta["cast"] = combined_cast
-
-    # Genres
-    if omdb_result and omdb_result.get("genres"):
-        meta["genres"] = omdb_result["genres"]
-    elif tmdb_result and tmdb_result.get("genres"):
-        meta["genres"] = tmdb_result["genres"]
-    else:
-        meta["genres"] = ["Unknown"]
-
+    meta = {}
+    # Directors
+    meta["directors"] = merge_field(
+        omdb_data.get("Director") if omdb_data else None,
+        tmdb_data.get("directors"),
+    )
+    # Writers (try created_by as fallback)
+    meta["writers"] = merge_field(
+        omdb_data.get("Writer") if omdb_data else None,
+        tmdb_data.get("created_by") or tmdb_data.get("writers"),
+    )
+    # Cast (TMDb: must be list of dicts with "name")
+    tmdb_cast = [c["name"] for c in tmdb_data.get("cast", []) if isinstance(c, dict) and "name" in c]
+    meta["cast"] = merge_field(
+        omdb_data.get("Actors") if omdb_data else None,
+        tmdb_cast,
+    )
+    # Genres (TMDb: must be list of dicts with "name")
+    tmdb_genres = [g["name"] for g in tmdb_data.get("genres", []) if isinstance(g, dict) and "name" in g]
+    meta["genres"] = merge_field(
+        omdb_data.get("Genre") if omdb_data else None,
+        tmdb_genres,
+    )
     # Debug log
     if omdb_result and omdb_result.get("debug_log"):
         meta["debug_log"] = omdb_result["debug_log"]
@@ -272,11 +255,9 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
 
     # --- Only fill empty fields; keep existing manual values if present ---
     if existing is not None:
-        # Defensive: support both None and empty list as "empty"
         result = {}
         for field in ("directors", "cast", "genres", "writers"):
             existing_val = existing.get(field)
-            # For directors/genres: treat None, empty, ["Unknown"], ["N/A"] as empty
             if field in ("directors", "genres"):
                 is_empty = (
                     not existing_val
@@ -290,7 +271,6 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
-            # For cast/writers: treat None, empty, or any "N/A" present as empty
             elif field in ("cast", "writers"):
                 is_empty = (
                     not existing_val
@@ -303,10 +283,8 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
-        # Also copy debug_log if present in meta
         if "debug_log" in meta:
             result["debug_log"] = meta["debug_log"]
-        # created_by is no longer returned or handled
         return result
     else:
         return meta
