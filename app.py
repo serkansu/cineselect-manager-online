@@ -121,13 +121,10 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # --- TV shows: always propagate created_by for TV/Show
+                        # Always gather created_by for TV shows
                         created_by = []
-                        if search_type in ["tv", "show"]:
+                        if search_type == "tv":
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
-                            # created_by her zaman meta’ya yazılsın; directors boşsa, directors = []
-                            if not directors or directors == ["Unknown"]:
-                                directors = []
                         if not directors:
                             directors = ["Unknown"]
                         if not genres:
@@ -142,12 +139,21 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         print("fetch_metadata TMDB error:", e)
 
     # Merge fetched data, OMDb preferred
-    meta = omdb_result or tmdb_result or {
-        "directors": ["Unknown"],
-        "cast": [],
-        "genres": ["Unknown"],
-        "created_by": []
-    }
+    # Ensure meta always has both "directors" and "created_by"
+    if omdb_result or tmdb_result:
+        meta = omdb_result or tmdb_result
+        # Ensure both keys exist
+        if "directors" not in meta:
+            meta["directors"] = ["Unknown"]
+        if "created_by" not in meta:
+            meta["created_by"] = []
+    else:
+        meta = {
+            "directors": ["Unknown"],
+            "cast": [],
+            "genres": ["Unknown"],
+            "created_by": []
+        }
 
     # --- Only fill empty fields; keep existing manual values if present ---
     if existing is not None:
@@ -166,7 +172,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
-        # For TV shows, propagate created_by even if empty
+        # Always propagate created_by (from meta) for TV shows; for movies, just keep as empty or as in meta
         result["created_by"] = meta.get("created_by", [])
         return result
     else:
