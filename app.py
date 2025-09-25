@@ -66,6 +66,7 @@ def read_seed_meta(imdb_id: str):
                         "directors": [d.strip() for d in (row.get("directors") or "").split(";") if d.strip()],
                         "cast": [c.strip() for c in (row.get("cast") or "").split(";") if c.strip()],
                         "genres": [g.strip() for g in (row.get("genres") or "").split(";") if g.strip()],
+                        "writers": [w.strip() for w in (row.get("writers") or "").split(";") if w.strip()],
                     }
     except Exception as e:
         print("read_seed_meta error:", e)
@@ -196,7 +197,11 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         }
                         # --- If "created_by" present, also add to writers (for explicitness, even if not crew) ---
                         if det.get("created_by"):
-                            tmdb_result["writers"] = [c["name"] for c in det["created_by"] if c.get("name")]
+                            # Add created_by names to writers if not already present
+                            for c in det["created_by"]:
+                                n = c.get("name")
+                                if n and n not in tmdb_result["writers"]:
+                                    tmdb_result["writers"].append(n)
     except Exception as e:
         print("fetch_metadata TMDB error:", e)
 
@@ -230,7 +235,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     meta["writers"] = [w.strip() for w in omdb_data["Writer"].split(",")]
         except Exception:
             pass
-        # Remove created_by if present
+        # Remove created_by if present (writers is canonical)
         meta.pop("created_by", None)
         # If debug_log missing (e.g. OMDb result), add fallback debug_log
         if "debug_log" not in meta or not meta["debug_log"]:
@@ -1243,6 +1248,7 @@ if query:
                     "directors": new_meta.get("directors", []) if new_meta else [],
                     "cast": new_meta.get("cast", []) if new_meta else [],
                     "genres": new_meta.get("genres", []) if new_meta else [],
+                    "writers": new_meta.get("writers", []) if new_meta else [],
                 }
                 # For TV shows, add created_by field if present
                 if media_key == "show" and new_meta and "created_by" in new_meta:
@@ -1261,7 +1267,7 @@ if query:
                     imdb_id,
                     item["title"],
                     item.get("year"),
-                    new_meta if new_meta else {"directors": [], "cast": [], "genres": []}
+                    new_meta if new_meta else {"directors": [], "cast": [], "genres": [], "writers": []}
                 )
                 st.success(f"✅ {item['title']} added to favorites!")
                 # clear search on next run to avoid "modified after instantiation" error
@@ -1507,6 +1513,7 @@ def show_favorites(fav_type, label):
                             "directors": new_meta.get("directors", []),
                             "cast": new_meta.get("cast", []),
                             "genres": new_meta.get("genres", []),
+                            "writers": new_meta.get("writers", []),
                         }
                         db.collection("favorites").document(fav["id"]).update(update_data)
                         append_seed_meta(imdb_id, title, year, new_meta)
