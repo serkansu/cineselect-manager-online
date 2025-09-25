@@ -1,3 +1,8 @@
+def clear_filter_if_empty(key):
+    """Resets the filter session state key to None if the associated widget selection is empty."""
+    val = st.session_state.get(key)
+    if not val:
+        st.session_state[key] = None
 import streamlit as st
 import urllib.parse
 # --- Query param parsing for single-click filters ---
@@ -121,13 +126,10 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                         directors = list({c.get("name") for c in det.get("credits", {}).get("crew", []) if c.get("job") == "Director" and c.get("name")})
                         # Cast (ilk 8 kişi)
                         cast = [c.get("name") for c in det.get("credits", {}).get("cast", [])][:8]
-                        # --- TV shows: always propagate created_by for TV/Show
                         created_by = []
+                        # For TV shows, always set created_by from det["created_by"]
                         if search_type in ["tv", "show"]:
                             created_by = [c.get("name") for c in det.get("created_by", []) if c.get("name")]
-                            # created_by her zaman meta’ya yazılsın; directors boşsa, directors = []
-                            if not directors or directors == ["Unknown"]:
-                                directors = []
                         if not directors:
                             directors = ["Unknown"]
                         if not genres:
@@ -166,7 +168,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                     result[field] = meta.get(field, [])
                 else:
                     result[field] = existing_val
-        # For TV shows, propagate created_by even if empty
+        # For TV shows, propagate created_by even if empty, and always if present in meta
         result["created_by"] = meta.get("created_by", [])
         return result
     else:
@@ -1217,7 +1219,9 @@ if media_type == "TV Show":
             else []
         )
         selected_directors = st.multiselect(
-            "🎬 Filter by Director", directors, default=default_director
+            "🎬 Filter by Director", directors, default=default_director,
+            key="director_multiselect",
+            on_change=clear_filter_if_empty, args=("filter_director",)
         )
     with col2:
         default_actor = (
@@ -1226,7 +1230,9 @@ if media_type == "TV Show":
             else []
         )
         selected_actors = st.multiselect(
-            "🎭 Filter by Actor", actors, default=default_actor
+            "🎭 Filter by Actor", actors, default=default_actor,
+            key="actor_multiselect",
+            on_change=clear_filter_if_empty, args=("filter_actor",)
         )
     with col3:
         default_genre = (
@@ -1235,7 +1241,9 @@ if media_type == "TV Show":
             else []
         )
         selected_genres = st.multiselect(
-            "🎞 Filter by Genre", genres, default=default_genre
+            "🎞 Filter by Genre", genres, default=default_genre,
+            key="genre_multiselect",
+            on_change=clear_filter_if_empty, args=("filter_genre",)
         )
     with col4:
         default_created_by = (
@@ -1244,7 +1252,9 @@ if media_type == "TV Show":
             else []
         )
         selected_created_by = st.multiselect(
-            "🎬 Filter by Created by", created_by_list, default=default_created_by
+            "🎬 Filter by Created by", created_by_list, default=default_created_by,
+            key="createdby_multiselect",
+            on_change=clear_filter_if_empty, args=("filter_created_by",)
         )
 else:
     col1, col2, col3 = st.columns(3)
@@ -1255,7 +1265,9 @@ else:
             else []
         )
         selected_directors = st.multiselect(
-            "🎬 Filter by Director", directors, default=default_director
+            "🎬 Filter by Director", directors, default=default_director,
+            key="director_multiselect",
+            on_change=clear_filter_if_empty, args=("filter_director",)
         )
     with col2:
         default_actor = (
@@ -1264,7 +1276,9 @@ else:
             else []
         )
         selected_actors = st.multiselect(
-            "🎭 Filter by Actor", actors, default=default_actor
+            "🎭 Filter by Actor", actors, default=default_actor,
+            key="actor_multiselect",
+            on_change=clear_filter_if_empty, args=("filter_actor",)
         )
     with col3:
         default_genre = (
@@ -1273,7 +1287,9 @@ else:
             else []
         )
         selected_genres = st.multiselect(
-            "🎞 Filter by Genre", genres, default=default_genre
+            "🎞 Filter by Genre", genres, default=default_genre,
+            key="genre_multiselect",
+            on_change=clear_filter_if_empty, args=("filter_genre",)
         )
     
 def get_sort_key(fav):
@@ -1377,11 +1393,12 @@ def show_favorites(fav_type, label):
 
             # Directors / Created by (label differs for shows)
             if fav.get("type") == "show":
-                if fav.get("created_by"):
+                # Always prefer created_by if present and non-empty
+                if fav.get("created_by") and len(fav.get("created_by", [])) > 0:
                     link_list(fav.get("created_by", []), "created_by", "🎬", "Created by")
-                elif fav.get("directors"):
+                elif fav.get("directors") and len(fav.get("directors", [])) > 0:
                     link_list(fav.get("directors", []), "director", "🎬", "Directors")
-            elif fav.get("directors"):
+            elif fav.get("directors") and len(fav.get("directors", [])) > 0:
                 link_list(fav.get("directors", []), "director", "🎬", "Directors")
             # Cast
             if fav.get("cast"):
