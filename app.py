@@ -190,13 +190,27 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         print("fetch_metadata TMDB error:", e)
 
     # --- Unified merge logic for directors, writers, cast, genres ---
+    def is_empty(val):
+        # Returns True if val is None, empty, or "n/a", "none", "unknown" (case-insensitive)
+        if not val:
+            return True
+        if isinstance(val, str):
+            return str(val).strip().lower() in ["n/a", "none", "unknown", ""]
+        if isinstance(val, (list, tuple, set)):
+            # If all items are empty, the whole field is empty
+            return all(is_empty(v) for v in val)
+        if isinstance(val, dict):
+            # If all values are empty, the dict is empty
+            return all(is_empty(v) for v in val.values())
+        return False
+
     def merge_field(omdb_val, tmdb_val):
         """
         Merge fields from OMDb and TMDb for any of: writers, directors, cast, genres.
-        - Normalize both OMDb and TMDb values to lists of strings, handling dicts with 'name'.
-        - Ignore values that are missing, "N/A", "Unknown", "None", or empty.
-        - If both OMDb and TMDb are present and valid, merge uniquely (preserving order).
-        - If only one is present, use it.
+        - If OMDb is empty (None, "", "N/A", "unknown", etc), use TMDb.
+        - If TMDb is empty, use OMDb.
+        - If both are present, merge uniquely (preserving order).
+        - Accepts string, list, or list of dicts (with "name").
         """
         IGNORE_VALUES = ("n/a", "unknown", "none", "")
         def normalize(val):
@@ -226,33 +240,22 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                 return cleaned
             return []
 
-        # Normalize both
+        omdb_is_empty = is_empty(omdb_val)
+        tmdb_is_empty = is_empty(tmdb_val)
         omdb_list = normalize(omdb_val)
         tmdb_list = normalize(tmdb_val)
-
-        # Filter out empty/invalid lists
-        def is_valid(lst):
-            # Only valid if at least one element is not in IGNORE_VALUES
-            # Also: if the list is non-empty but all elements are in IGNORE_VALUES, treat as invalid
-            if not lst:
-                return False
-            # If all elements are in IGNORE_VALUES (case-insensitive), invalid
-            if all((str(x or "").strip().lower() in IGNORE_VALUES) for x in lst):
-                return False
-            return True
-
-        omdb_valid = is_valid(omdb_list)
-        tmdb_valid = is_valid(tmdb_list)
-
-        # Merge uniquely, preserving order (OMDb priority)
-        if omdb_valid and tmdb_valid:
-            merged = list(dict.fromkeys(omdb_list + tmdb_list))
-            return merged
-        if omdb_valid:
-            return omdb_list
-        if tmdb_valid:
+        # If OMDb is empty, use TMDb
+        if omdb_is_empty and not tmdb_is_empty:
             return tmdb_list
-        return []
+        # If TMDb is empty, use OMDb
+        if tmdb_is_empty and not omdb_is_empty:
+            return omdb_list
+        # If both are empty, return []
+        if omdb_is_empty and tmdb_is_empty:
+            return []
+        # Both are present: merge
+        merged = list(dict.fromkeys(omdb_list + tmdb_list))
+        return merged
 
     # OMDb/TMDb raw data
     omdb_data = None
@@ -264,29 +267,17 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
 
     meta = {}
     # Writers: prefer created_by from TMDb if present, else writers field
-    # Use created_by if present, else fall back to writers
     meta["writers"] = merge_field(
         omdb_data.get("Writer") if omdb_data else None,
-        tmdb_data.get("created_by") or tmdb_data.get("writers")
+        tmdb_data.get("created_by") if tmdb_data.get("created_by") else tmdb_data.get("writers")
     )
     # Directors: If OMDb is missing or "N/A", fall back to TMDb crew (job == "Director") or created_by.
     omdb_director_val = omdb_data.get("Director") if omdb_data else None
     tmdb_director_val = tmdb_data.get("directors")
-    # If OMDb is missing or "N/A", use TMDb crew or created_by for shows
-    IGNORE_VALUES = ("n/a", "unknown", "none", "")
-    omdb_dir_list = []
-    if omdb_director_val:
-        if isinstance(omdb_director_val, str):
-            omdb_dir_list = [d.strip() for d in re.split(r"[;,]", omdb_director_val) if d.strip().lower() not in IGNORE_VALUES]
-        elif isinstance(omdb_director_val, list):
-            omdb_dir_list = [d.strip() for d in omdb_director_val if isinstance(d, str) and d.strip().lower() not in IGNORE_VALUES]
-    # If OMDb directors is empty or all invalid, fallback
-    if not omdb_dir_list:
-        # For TV, prefer created_by if present
-        if tmdb_data.get("created_by"):
-            tmdb_director_val = tmdb_data.get("created_by")
-        elif tmdb_data.get("directors"):
-            tmdb_director_val = tmdb_data.get("directors")
+    # If OMDb is empty, use created_by for TV, else TMDb directors
+    if is_empty(omdb_director_val):
+        # For TV, prefer created_by if present, else directors
+        tmdb_director_val = tmdb_data.get("created_by") if tmdb_data.get("created_by") else tmdb_data.get("directors")
     meta["directors"] = merge_field(
         omdb_director_val,
         tmdb_director_val
