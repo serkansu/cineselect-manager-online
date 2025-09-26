@@ -91,6 +91,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
             if r.status_code == 200:
                 d = r.json()
                 if d.get("Response") == "True":
+                    omdb_data = d
                     directors = [x.strip() for x in (d.get("Director") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     cast = [x.strip() for x in (d.get("Actors") or "").split(",") if x.strip() and x.strip() != "N/A"]
                     genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
@@ -112,7 +113,6 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                             "writers": writers,
                             "debug_log": "Directors from OMDb"
                         }
-                    omdb_data = d
     except Exception as e:
         print("fetch_metadata OMDb error:", e)
 
