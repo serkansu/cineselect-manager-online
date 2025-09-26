@@ -83,6 +83,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
     omdb_result = None
     tmdb_result = None
     omdb_genres = []
+    omdb_data = None
     try:
         omdb_key = os.getenv("OMDB_API_KEY")
         if omdb_key and imdb_id:
@@ -92,10 +93,11 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
                 d = r.json()
                 if d.get("Response") == "True":
                     omdb_data = d
-                    directors = [x.strip() for x in (d.get("Director") or "").split(",") if x.strip() and x.strip() != "N/A"]
-                    cast = [x.strip() for x in (d.get("Actors") or "").split(",") if x.strip() and x.strip() != "N/A"]
-                    genres = [x.strip() for x in (d.get("Genre") or "").split(",") if x.strip() and x.strip() != "N/A"]
-                    writers = [x.strip() for x in (d.get("Writer") or "").split(",") if x.strip() and x.strip() != "N/A"]
+                    # Alan bazında kontrol: "N/A" ise sadece o alanı boş bırak
+                    directors = [] if d.get("Director") in (None, "N/A") else [x.strip() for x in (d.get("Director", "")).split(",") if x.strip()]
+                    cast = [] if d.get("Actors") in (None, "N/A") else [x.strip() for x in (d.get("Actors", "")).split(",") if x.strip()]
+                    genres = [] if d.get("Genre") in (None, "N/A") else [x.strip() for x in (d.get("Genre", "")).split(",") if x.strip()]
+                    writers = [] if d.get("Writer") in (None, "N/A") else [x.strip() for x in (d.get("Writer", "")).split(",") if x.strip()]
                     omdb_genres = genres
                     if (not directors) and writers:
                         omdb_result = {
@@ -258,11 +260,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         return merged
 
     # OMDb/TMDb raw data
-    omdb_data = None
-    if 'omdb_data' in locals():
-        omdb_data = locals().get('omdb_data')
-    elif 'd' in locals():
-        omdb_data = locals().get('d')
+    # omdb_data is already set above, never set to None forcibly anymore
     tmdb_data = tmdb_result if tmdb_result else {}
 
     meta = {}
