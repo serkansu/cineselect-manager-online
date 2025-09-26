@@ -292,6 +292,15 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         omdb_data.get("Genre") if omdb_data else None,
         tmdb_data.get("genres")
     )
+    # --- Enhanced debug block: print both raw OMDb/TMDb JSON and merged field sources ---
+    print("==== DEBUG METADATA SOURCES ====")
+    print("OMDb raw:", json.dumps(omdb_data, indent=2, ensure_ascii=False) if omdb_data else None)
+    print("TMDb raw:", json.dumps(tmdb_data, indent=2, ensure_ascii=False) if tmdb_data else None)
+    print("Merged Directors:", meta["directors"])
+    print("Merged Writers:", meta["writers"])
+    print("Merged Cast:", meta["cast"])
+    print("Merged Genres:", meta["genres"])
+    print("==== END DEBUG ====")
     # --- Debug prints for raw/merged values ---
     print(f"DEBUG directors: OMDb={omdb_data.get('Director') if omdb_data else None}, TMDb={tmdb_data.get('directors')} → {meta['directors']}")
     print(f"DEBUG writers: OMDb={omdb_data.get('Writer') if omdb_data else None}, TMDb={tmdb_data.get('created_by') or tmdb_data.get('writers')} → {meta['writers']}")
