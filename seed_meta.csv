@@ -92,6 +92,7 @@ tt1049413,Up,2009,Pete Docter,Ed Asner; Christopher Plummer; Jordan Nagai; Bob P
 tt0407887,The Departed,2006,Martin Scorsese,Leonardo DiCaprio; Matt Damon; Jack Nicholson; Mark Wahlberg; Martin Sheen; Ray Winstone; Vera Farmiga; Anthony Anderson,Drama; Thriller; Crime,
 tt35882130,"Alien, Terror in Space",2025,Anne Cutaia; Sophie Peyrard,Anne Cardona; Jean-Pierre Jeunet; Tom Skerritt; Veronica Cartwright; Roger Christian; Amy Nicholson; Ian Nathan; Ximena Gallardo,Documentary; History; TV Movie,
 tt0348150,Superman Returns,2006,Bryan Singer,Brandon Routh; Kate Bosworth; Kevin Spacey; James Marsden; Parker Posey; Frank Langella; Sam Huntington; Eva Marie Saint,Science Fiction; Action; Adventure,
+tt1392214,Prisoners,2013,Denis Villeneuve,Hugh Jackman; Jake Gyllenhaal; Viola Davis; Maria Bello; Terrence Howard; Melissa Leo; Paul Dano; Dylan Minnette,Drama; Thriller; Crime,Aaron Guzikowski
 tt1220719,Ip Man,2008,Wilson Yip,Donnie Yen; Simon Yam; Lynn Hung Doi-Lam; Hiroyuki Ikeuchi; Gordon Lam Ka-Tung; Louis Fan Siu-Wong; Xing Yu; Wong Yau-Nam,Drama; Action; History,
 tt0443543,The Illusionist,2006,Neil Burger,Edward Norton; Paul Giamatti; Jessica Biel; Rufus Sewell; Eddie Marsan; Aaron Taylor-Johnson; Eleanor Tomlinson; Jake Wood,Fantasy; Drama; Thriller; Romance,
 tt2096673,Inside Out,2015,Pete Docter,Amy Poehler; Phyllis Smith; Richard Kind; Bill Hader; Lewis Black; Mindy Kaling; Kaitlyn Dias; Diane Lane,Animation; Family; Adventure; Drama; Comedy,
@@ -121,6 +122,7 @@ tt0069768,Battle for the Planet of the Apes,1973,J. Lee Thompson,Roddy McDowall;
 tt0112722,Copycat,1995,Jon Amiel,Sigourney Weaver; Holly Hunter; Dermot Mulroney; William McNamara; Harry Connick Jr.; J.E. Freeman; Will Patton; John Rothman,Thriller; Crime; Mystery; Horror; Drama,
 tt0800080,The Incredible Hulk,2008,Louis Leterrier,Edward Norton; Liv Tyler; Tim Roth; William Hurt; Tim Blake Nelson; Ty Burrell; Christina Cabot; Peter Mensah,Science Fiction; Action; Adventure,
 tt0371746,Iron Man,2008,Jon Favreau,Robert Downey Jr.; Terrence Howard; Jeff Bridges; Gwyneth Paltrow; Leslie Bibb; Shaun Toub; Faran Tahir; Clark Gregg,Action; Science Fiction; Adventure,
+tt0010208,Harakiri,1919,Fritz Lang,Paul Biensfeldt; Lil Dagover; George John; Meinhart Maur; Rudolf Lettinger; Erner Huebsch; Kaete Juster; Niels Prien,Drama,John Luther Long; David Belasco
 tt0387564,Saw,2004,James Wan,Cary Elwes; Leigh Whannell; Danny Glover; Monica Potter; Ken Leung; Makenzie Vega; Michael Emerson; Shawnee Smith,Horror; Mystery; Crime,
 tt0085750,Jaws 3-D,1983,Joe Alves,Dennis Quaid; Bess Armstrong; Simon MacCorkindale; Louis Gossett Jr.; John Putch; Lea Thompson; P.H. Moriarty; Dan Blasko,Thriller; Horror,
 tt0120620,Brokedown Palace,1999,Jonathan Kaplan,Claire Danes; Kate Beckinsale; Bill Pullman; Jacqueline Kim; Lou Diamond Phillips; Daniel Lapaine; Tom Amandes; Aimee Graham,Drama; Thriller; Mystery,
@@ -175,7 +177,6 @@ tt0111282,Stargate,1994,Roland Emmerich,James Spader; Kurt Russell; Jaye Davidso
 tt0367882,Indiana Jones and the Kingdom of the Crystal Skull,2008,Steven Spielberg,Harrison Ford; Cate Blanchett; Karen Allen; Shia LaBeouf; Ray Winstone; John Hurt; Jim Broadbent; Igor Jijikine,Adventure; Action,
 tt0088247,The Terminator,1984,James Cameron,Arnold Schwarzenegger; Michael Biehn; Linda Hamilton; Paul Winfield; Lance Henriksen; Rick Rossovich; Bess Motta; Earl Boen,Action; Thriller; Science Fiction,
 tt0325980,Pirates of the Caribbean: The Curse of the Black Pearl,2003,Gore Verbinski,Johnny Depp; Geoffrey Rush; Orlando Bloom; Keira Knightley; Jack Davenport; Jonathan Pryce; Lee Arenberg; Mackenzie Crook,Adventure; Fantasy; Action,
-tt0472205,Watching the Detectives,2007,Paul Soter,Cillian Murphy; Lucy Liu; Jason Sudeikis; Michael Panes; Callie Thorne; Michael Yurchak; Heather Burns; Mark Harelik,Comedy; Romance,
 tt0985699,Valkyrie,2008,Bryan Singer,Tom Cruise; Kenneth Branagh; Bill Nighy; Terence Stamp; Tom Wilkinson; Carice van Houten; Kenneth Cranham; Thomas Kretschmann,Drama; Thriller; War,
 tt1233227,Saw VI,2009,Kevin Greutert,Tobin Bell; Costas Mandylor; Mark Rolston; Betsy Russell; Shawnee Smith; Peter Outerbridge; Athena Karkanis; Samantha Lemole,Horror; Thriller,
 tt0079858,Scavenger Hunt,1979,Michael Schultz,Richard Benjamin; James Coco; Scatman Crothers; Ruth Gordon; Cloris Leachman; Cleavon Little; Roddy McDowall; Robert Morley,Comedy,
@@ -526,17 +527,17 @@ tt0115798,The Cable Guy,1996,Ben Stiller,Jim Carrey; Matthew Broderick; Leslie M
 tt0107798,The Pelican Brief,1993,Alan J. Pakula,Julia Roberts; Denzel Washington; Sam Shepard; John Heard; Tony Goldwyn; James B. Sikking; William Atherton; Robert Culp,Thriller; Crime; Drama,
 tt21261712,Back to Black,2024,Sam Taylor-Johnson,Marisa Abela; Jack O'Connell; Eddie Marsan; Lesley Manville; Juliet Cowan; Sam Buchanan; Pete Lee-Wilson; Thelma Ruby,Music; History; Drama,
 tt3581920,The Last of Us,2023,Neil Druckmann; Craig Mazin,Bella Ramsey; Gabriel Luna; Isabela Merced; Young Mazino,Drama,
-tt0086824,Voltron: Defender of the Universe,1984,,Peter Cullen; Michael Bell; Lennie Weinrib,Animation; Adventure; Family,
+tt0086824,Voltron: Defender of the Universe,1984,,Peter Cullen; Michael Bell; Lennie Weinrib; Neil Ross; B.J. Ward; Jack Angel; Tress MacNeille,Animation; Adventure; Family; Sci-Fi & Fantasy; Kids,
 tt0460649,How I Met Your Mother,2005,Craig Thomas; Carter Bays,Josh Radnor; Neil Patrick Harris; Jason Segel; Alyson Hannigan; Cobie Smulders; Cristin Milioti,Comedy,
 tt13443470,Wednesday,2022,Miles Millar; Alfred Gough,Jenna Ortega; Steve Buscemi; Hunter Doohan; Emma Myers; Joy Sunday; Isaac Ordonez; Moosa Mostafa; Owen Painter,Sci-Fi & Fantasy; Mystery; Comedy,
 tt0296310,The Blue Planet,2001,Alastair Fothergill,David Attenborough,Documentary,
 tt0080274,Shōgun,1980,James Clavell,Richard Chamberlain; Toshirō Mifune; Yoko Shimada; John Rhys-Davies; Damien Thomas; Frankie Sakai; Yūki Meguro; Hiromi Senno,Action & Adventure; Drama; War & Politics,
-tt0903747,Breaking Bad,2008,Vince Gilligan,Bryan Cranston; Aaron Paul; Anna Gunn; RJ Mitte; Dean Norris; Betsy Brandt; Bob Odenkirk; Jonathan Banks,Drama; Crime,
-tt0944947,Game of Thrones,2011,David Benioff; D. B. Weiss,Emilia Clarke; Peter Dinklage; Kit Harington,Action; Adventure; Drama,
-tt0773262,Dexter,2006,James Manos Jr.,Michael C. Hall; Jennifer Carpenter; Geoff Pierson; David Zayas; James Remar; Aimee Garcia; Desmond Harrington; C.S. Lee,Crime; Drama; Mystery,
+tt0903747,Breaking Bad,2008,,Bryan Cranston; Aaron Paul; Anna Gunn,Crime; Drama; Thriller,Vince Gilligan
+tt0944947,Game of Thrones,2011,,Peter Dinklage; Kit Harington; Nikolaj Coster-Waldau; Lena Headey; Emilia Clarke; Liam Cunningham; Maisie Williams; Isaac Hempstead Wright,Sci-Fi & Fantasy; Drama; Action & Adventure,David Benioff; D. B. Weiss
+tt0773262,Dexter,2006,,Michael C. Hall; Jennifer Carpenter; Geoff Pierson; David Zayas; James Remar; Aimee Garcia; Desmond Harrington; C.S. Lee,Crime; Drama; Mystery,James Manos Jr.
 tt1796960,Homeland,2011,Howard Gordon; Alex Gansa; Gideon Raff,Claire Danes; Mandy Patinkin; Maury Sterling; Numan Acar; Nimrat Kaur; Linus Roache; Costa Ronin,Drama; War & Politics; Crime,
 tt0898266,The Big Bang Theory,2007,Chuck Lorre; Bill Prady,Johnny Galecki; Jim Parsons; Kaley Cuoco; Simon Helberg; Kunal Nayyar; Melissa Rauch; Mayim Bialik,Comedy,
-tt0306414,The Wire,2002,,Dominic West; Lance Reddick; Sonja Sohn; Wendell Pierce; Michael Kenneth Williams; Deirdre Lovejoy; J.D. Williams; John Doman,Crime; Drama,David Simon
+tt0306414,The Wire,2002,David Simon,Dominic West; Lance Reddick; Sonja Sohn; Wendell Pierce; Michael Kenneth Williams; Deirdre Lovejoy; J.D. Williams; John Doman,Crime; Drama; Thriller,David Simon
 tt0084967,The A-Team,1983,Frank Lupo; Stephen J. Cannell,George Peppard; Dirk Benedict; Mr. T; Dwight Schultz; Eddie Velez; Robert Vaughn,Action & Adventure; Comedy; Crime,
 tt13623632,Alien: Earth,2025,Noah Hawley,Sydney Chandler; Alex Lawther; Essie Davis; Samuel Blenkin; Babou Ceesay; Adarsh Gourav; Erana James; Lily Newmark,Sci-Fi & Fantasy; Drama,
 tt0813715,Heroes,2006,Tim Kring,Zachary Quinto; Masi Oka; Hayden Panettiere; Adrian Pasdar; Sendhil Ramamurthy; Milo Ventimiglia; Ali Larter; Robert Knepper,Sci-Fi & Fantasy; Drama,
@@ -545,27 +546,27 @@ tt0088526,The Golden Girls,1985,Susan Harris,Bea Arthur; Betty White; Rue McClan
 tt0086687,The Cosby Show,1984,Bill Cosby; Michael J. Leeson; Ed. Weinberger,Bill Cosby; Phylicia Rashād; Malcolm-Jamal Warner; Tempestt Bledsoe; Keshia Knight Pulliam; Sabrina Le Beauf; Geoffrey Owens; Raven-Symoné,Comedy; Family,
 tt0090501,Perfect Strangers,1986,Dale McRaven,Bronson Pinchot; Mark Linn-Baker; Melanie Wilson; Rebeca Arthur; Belita Moreno; Sam Anderson,Comedy,
 tt0086759,Miami Vice,1984,Anthony Yerkovich,Don Johnson; Philip Michael Thomas; Saundra Santiago; Olivia Brown; Michael Talbott; Edward James Olmos,Crime; Drama,
-tt28466970,Ferry: The Series,2023,Nico Moolenaar; Eshref Reybrouck,Frank Lammers; Elise Schaap; Raymond Thiry; Yannick van de Velde; Tim Haars; Huub Smit; Tygo Gernandt; Poal Cairo,Crime; Drama,
-tt0285331,24,2001,Robert Cochran; Joel Surnow,Kiefer Sutherland; Mary Lynn Rajskub; Kim Raver; Yvonne Strahovski; Tate Donovan; William Devane,Action & Adventure; Drama; Crime,
-tt0053502,The Flintstones,1960,Joseph Barbera,Alan Reed; Mel Blanc; Jean Vander Pyl; Gerry Johnson; Don Messick,Family; Animation; Comedy; Kids,
+tt28466970,Ferry: The Series,2023,,Frank Lammers; Elise Schaap; Sean Burgos,Crime; Drama; Thriller,Piet Matthys; Nico Moolenaar; Bart Uytdenhouwen
+tt0285331,24,2001,Robert Cochran; Joel Surnow,Kiefer Sutherland; Mary Lynn Rajskub; Kim Raver; Yvonne Strahovski; Tate Donovan; William Devane,Action & Adventure; Drama; Crime,Robert Cochran; Joel Surnow
+tt0053502,The Flintstones,1960,William Hanna; Joseph Barbera,Alan Reed; Mel Blanc; Jean Vander Pyl; Gerry Johnson; Don Messick,Family; Animation; Comedy; Kids,William Hanna; Joseph Barbera
 tt0088571,Moonlighting,1985,Glenn Gordon Caron,Cybill Shepherd; Bruce Willis; Allyce Beasley; Curtis Armstrong,Comedy; Drama; Mystery; Crime,
 tt0081863,Flamingo Road,1981,Rita Lakin; Robert Wilder,John Beck; Woody Brown; Howard Duff; Morgan Fairchild; Mark Harmon; Kevin McCarthy; Cristina Raines; Barbara Rush,Soap; Drama,
 ,The Game of Thrones Reunion Hosted by Conan O'Brien,2021,,,Unknown,
 tt0121955,South Park,1997,Matt Stone; Trey Parker,Trey Parker; Matt Stone; Mona Marshall; Jennifer Howell,Animation; Comedy,
 tt27713897,Arnold,2023,Lesley Chilcott,Arnold Schwarzenegger; James Cameron; Sylvester Stallone,Documentary; Biography,
 tt0455275,Prison Break,2005,Paul T. Scheuring,Wentworth Miller; Dominic Purcell; Sarah Wayne Callies; Paul Adelstein; Rockmond Dunbar; Robert Knepper; Amaury Nolasco; Inbar Lavi,Action & Adventure; Crime; Drama,
-tt0055683,The Jetsons,1962,William Hanna; Joseph Barbera,George O'Hanlon; Penny Singleton; Daws Butler; Janet Waldo; Jean Vander Pyl; Don Messick; Mel Blanc; Frank Welker,Animation; Comedy; Family; Kids,
+tt0055683,The Jetsons,1962,William Hanna; Joseph Barbera,George O'Hanlon; Janet Waldo; Mel Blanc; Penny Singleton; Daws Butler; Jean Vander Pyl; Don Messick; Frank Welker,Animation; Comedy; Family; Kids,Joseph Barbera; William Hanna
 tt0083437,Knight Rider,1982,Glen A. Larson,David Hasselhoff; Edward Mulhare; William Daniels; Patricia McPherson; Peter Parros,Action & Adventure; Drama; Sci-Fi & Fantasy; Crime,
 tt0417299,Avatar: The Last Airbender,2005,Michael Dante DiMartino; Bryan Konietzko,Zach Tyler Eisen; Mae Whitman; Jack De Sena; Dante Basco; Jessie Flower; Dee Bradley Baker,Animation; Action & Adventure; Sci-Fi & Fantasy,
-tt33043892,Dexter: Resurrection,2025,Clyde Phillips,Michael C. Hall; Uma Thurman; Jack Alcott; David Zayas; James Remar; Peter Dinklage; Ntare Guma Mbaho Mwine; Kadia Saraf,Crime; Drama; Mystery,
+tt33043892,Dexter: Resurrection,2025,,Michael C. Hall; Uma Thurman; Jack Alcott; David Zayas; James Remar; Peter Dinklage; Ntare Guma Mbaho Mwine; Kadia Saraf,Crime; Drama; Mystery,Clyde Phillips
 tt0088559,MacGyver,1985,Lee David Zlotoff,Richard Dean Anderson; Dana Elcar; Elyssa Davalos; Bruce McGill,Drama; Action & Adventure; Crime,
 tt27478132,Making of: The Last of Us,2023,Paul C. Rosen,Pedro Pascal; Bella Ramsey; Neil Druckmann; Craig Mazin; Anna Torv; Troy Baker; Ashley Johnson; Ksenia Sereda,Documentary,
-tt0278855,Vicky the Viking,1974,Noboru Ishiguro; Chikao Katsui; Hiroshi Saitô,Adrian Hoven; Manfred Seipold; Martin Halm,Animation; Adventure; Comedy,
+tt0278855,Vicky the Viking,1974,,Adrian Hoven; Manfred Seipold; Martin Halm,Animation; Adventure; Comedy,
 tt0085109,Webster,1983,Stu Silver,Susan Clark; Alex Karras; Emmanuel Lewis,Comedy,
 tt0077000,Dallas,1978,David Jacobs,Patrick Duffy; Kimberly Foster; Larry Hagman; Ken Kercheval,Soap; Drama; Family,
 tt0106179,The X-Files,1993,Chris Carter,David Duchovny; Gillian Anderson; Mitch Pileggi; William B. Davis,Mystery; Sci-Fi & Fantasy; Crime,
 tt2085059,Black Mirror,2011,,,Sci-Fi & Fantasy; Drama; Mystery,Charlie Brooker
-tt0092400,Married... with Children,1987,Michael G. Moye; Ron Leavitt,Ed O'Neill; Katey Sagal; Amanda Bearse; Christina Applegate; David Faustino; Ted McGinley,Comedy,
+tt0092400,Married... with Children,1987,Michael G. Moye; Ron Leavitt,Ed O'Neill; Christina Applegate; Katey Sagal; Amanda Bearse; David Faustino; Ted McGinley,Comedy,Ron Leavitt; Michael G. Moye
 tt0096657,Mr. Bean,1990,Richard Curtis; Rowan Atkinson,Rowan Atkinson,Comedy,
 tt0096697,The Simpsons,1989,Matt Groening,Dan Castellaneta; Julie Kavner; Nancy Cartwright; Yeardley Smith; Hank Azaria; Harry Shearer,Family; Animation; Comedy,
 tt0279600,Smallville,2001,Alfred Gough; Miles Millar,Tom Welling; Erica Durance; Cassidy Freeman; Justin Hartley,Sci-Fi & Fantasy; Action & Adventure; Drama,
@@ -578,29 +579,30 @@ tt2699128,The Leftovers,2014,Damon Lindelof; Tom Perrotta,Justin Theroux; Amy Br
 tt0142036,Escrava Isaura,1976,Herval Rossano,Lucélia Santos; Rubens de Falco; Edwin Luisi; Roberto Pirillo; Norma Blum; Gilberto Martinho; Beatriz Lyra; Átila Iório,Soap; Drama,
 tt0086681,Charles in Charge,1984,Michael Jacobs,Scott Baio; Willie Aames; Nicole Eggert; Josie Davis; Alexander Polinsky; Ellen Travolta; James T. Callahan,Comedy,
 tt0081933,The Smurfs,1981,Peyo,Don Messick; Lucille Bliss; Frank Welker; Michael Bell; June Foray; Paul Winchell; Danny Goldman; Hamilton Camp,Animation; Family; Sci-Fi & Fantasy; Kids; Comedy,
-tt3032476,Better Call Saul,2015,Vince Gilligan; Peter Gould,Bob Odenkirk; Jonathan Banks; Rhea Seehorn; Tony Dalton; Giancarlo Esposito,Crime; Drama,
+tt3032476,Better Call Saul,2015,,Bob Odenkirk; Rhea Seehorn; Jonathan Banks,Crime; Drama,Vince Gilligan; Peter Gould
 tt2442560,Peaky Blinders,2013,Steven Knight,Cillian Murphy; Paul Anderson; Sophie Rundle; Natasha O'Keeffe,Drama; Crime,
 tt2802850,Fargo,2014,,Juno Temple; Jennifer Jason Leigh; David Rysdahl; Joe Keery; Lamorne Morris; Richa Shukla Moorjani; Sam Spruell; Sienna King,Crime; Drama,Noah Hawley
 tt3205802,How to Get Away with Murder,2014,Peter Nowalk,Viola Davis; Billy Brown; Jack Falahee; Rome Flynn; Aja Naomi King; Matt McGorry; Conrad Ricamora; Amirah Vann,Crime; Drama; Mystery,
 tt3596174,Henry Danger,2014,Dan Schneider; Dana Olsen,Jace Norman; Cooper Barnes; Riele Downs; Sean Ryan Fox; Ella Anderson; Michael D. Cohen,Comedy; Family; Kids; Drama,
 tt3596176,"Nicky, Ricky, Dicky & Dawn",2014,Matt Fleckenstein,Aidan Gallagher; Lizzy Greene; Casey Simpson; Brian Stepanek; Allison Munn,Family; Kids; Comedy,
-tt1740299,The Man in the High Castle,2015,Frank Spotnitz,Alexa Davalos; Rufus Sewell; Joel de la Fuente; Jason O'Mara; Brennan Brown; Chelah Horsdal; Frances Turner,Sci-Fi & Fantasy; Drama,
+tt1740299,The Man in the High Castle,2015,,Alexa Davalos; Rufus Sewell; Joel de la Fuente; Jason O'Mara; Brennan Brown; Chelah Horsdal; Frances Turner,Sci-Fi & Fantasy; Drama,Frank Spotnitz
 tt0295794,The New Adventures of Lucky Luke,2001,Olivier Jean-Marie; Morris; René Goscinny,Antoine de Caunes,Western; Animation; Comedy,
-tt4346362,Heidi,2015,,Monique Hore; Laura Prats; Tess Meyer,Animation; Adventure; Drama,
+tt4346362,Heidi,2015,Christel Gonnard,Monique Hore; Laura Prats; Tess Meyer,Animation; Adventure; Drama; Family; Kids,Christel Gonnard
 tt4158110,Mr. Robot,2015,Sam Esmail,Rami Malek; Christian Slater; Carly Chaikin,Crime; Drama,
 tt0475784,Westworld,2016,Jonathan Nolan; Lisa Joy,Evan Rachel Wood; Thandiwe Newton; Jeffrey Wright; Tessa Thompson; Aaron Paul; James Marsden; Angela Sarafyan; Ed Harris,Sci-Fi & Fantasy; Western,
 tt2707408,Narcos,2015,Chris Brancato; Doug Miro; Carlo Bernard,Pedro Pascal; Matias Varela; Damián Alcázar; Francisco Denis; Alberto Ammann; Pêpê Rapazote; Arturo Castro; Michael Stahl-David,Crime; Drama,
 tt0175863,Lucky Luke,1984,Philippe Landrot,Jacques Thébault; Bernard Demory; Gilles Biot; Jean Tolzaque; Pierre Tornade; Patrice Baudrier; Olivier Hémon; Michel Tugot-Doris,Animation; Comedy; Family; Western; Kids,
-tt0092455,Star Trek: The Next Generation,1987,Gene Roddenberry,Patrick Stewart; Jonathan Frakes; Brent Spiner; LeVar Burton; Michael Dorn; Marina Sirtis; Gates McFadden,Sci-Fi & Fantasy; Action & Adventure; Drama; Mystery,
+tt0092455,Star Trek: The Next Generation,1987,Gene Roddenberry,Patrick Stewart; Brent Spiner; Jonathan Frakes; LeVar Burton; Michael Dorn; Marina Sirtis; Gates McFadden,Action; Adventure; Drama; Sci-Fi & Fantasy; Action & Adventure; Mystery,Gene Roddenberry
+tt2401256,The Night Of,2016,Richard Price; Steven Zaillian,Riz Ahmed; John Turturro; Bill Camp; Payman Maadi; Jeannie Berlin; Poorna Jagannathan; Michael Kenneth Williams; Sofia Black-D'Elia,Crime; Drama; Mystery,Richard Price; Steven Zaillian
 tt4574334,Stranger Things,2016,Ross Duffer; Matt Duffer,Millie Bobby Brown; Finn Wolfhard; Gaten Matarazzo; Caleb McLaughlin; Sadie Sink; David Harbour; Winona Ryder; Natalia Dyer,Drama; Sci-Fi & Fantasy; Mystery,
-tt0190900,Casper And The Angels,1979,Oscar Dufau; George Gordon; Ray Patterson; Carl Urbano,John Stephenson; Julie McWhirter; Laurel Page,Family; Sci-Fi & Fantasy; Animation,
+tt0190900,Casper And The Angels,1979,,Julie McWhirter; Hal Smith; Paul Winchell; John Stephenson; Laurel Page,Animation; Comedy; Family; Sci-Fi & Fantasy,
 tt5290382,MINDHUNTER,2017,Joe Penhall,Jonathan Groff; Holt McCallany; Anna Torv; Stacey Roca,Drama; Crime,
 tt5834204,The Handmaid's Tale,2017,Bruce Miller,Elisabeth Moss; Yvonne Strahovski; Samira Wiley,Drama; Sci-Fi & Fantasy,
 tt5071412,Ozark,2017,Mark Williams; Bill Dubuque,Jason Bateman; Laura Linney; Sofia Hublitz; Skylar Gaertner; Julia Garner; Charlie Tahan; Jessica Frances Dukes; Felix Solis,Crime; Drama,
 tt5753856,Dark,2017,Baran bo Odar; Jantje Friese,Louis Hofmann,Crime; Drama; Sci-Fi & Fantasy; Mystery,
 tt7263154,Undercover,2019,Piet Matthys; Bart Uytdenhouwen; Nico Moolenaar,Tom Waes; Frank Lammers; Elise Schaap; Jeroen Van der Ven; Ruth Becquart; Murat Seven; Nazmiye Oral; Gökhan Girginol,Crime; Drama,
 tt7366338,Chernobyl,2019,Craig Mazin,Jared Harris; Stellan Skarsgård; Emily Watson; Paul Ritter; Jessie Buckley; Adam Nagaitis; Sam Troughton; Robert Emms,Drama,
-tt7949606,The Last Czars,2019,,Robert Jack; Susanna Herbert; Ben Cartwright,Documentary; Drama; History,N/A
+tt7949606,The Last Czars,2019,,Robert Jack; Susanna Herbert; Ben Cartwright,Documentary; Drama; History,
 tt5952634,The Spy,2019,Gideon Raff,Sacha Baron Cohen; Noah Emmerich; Hadar Ratzon Rotem; Alexander Siddig; Waleed Zuaiter; Nassim Lyes; Moni Moshonov; Yael Eitan,Drama,
 tt10857160,She-Hulk: Attorney at Law,2022,Jessica Gao,Tatiana Maslany; Ginger Gonzaga; Jameela Jamil; Renée Elise Goldsberry; Josh Segarra,Comedy; Sci-Fi & Fantasy,
 tt0081858,Falcon Crest,1981,"Earl Hamner, Jr.",Jane Wyman; David Selby; Lorenzo Lamas; Gregory Harrison; Kristian Alfonso; Chao-Li Chi; Wendy Phillips; Andrea Thompson,Soap; Drama,
