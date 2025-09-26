@@ -198,6 +198,7 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         - If both OMDb and TMDb are present and valid, merge uniquely (preserving order).
         - If only one is present, use it.
         """
+        IGNORE_VALUES = ("n/a", "unknown", "none", "")
         def normalize(val):
             # Accepts str, list of str, list of dicts (with "name"), or None
             if not val:
@@ -205,22 +206,22 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
             # If it's a dict with "name", treat as one item
             if isinstance(val, dict):
                 n = val.get("name")
-                if n and str(n).strip().lower() not in ("n/a", "unknown", "none", ""):
+                if n and str(n).strip().lower() not in IGNORE_VALUES:
                     return [str(n).strip()]
                 return []
             if isinstance(val, str):
                 # OMDb: comma or semicolon separated string
-                parts = [p.strip() for p in re.split(r"[;,]", val) if p and p.strip().lower() not in ("n/a", "unknown", "none", "")]
+                parts = [p.strip() for p in re.split(r"[;,]", val) if p and p.strip().lower() not in IGNORE_VALUES]
                 return parts
             if isinstance(val, list):
                 cleaned = []
                 for v in val:
                     if isinstance(v, dict):
                         n = v.get("name")
-                        if n and str(n).strip().lower() not in ("n/a", "unknown", "none", ""):
+                        if n and str(n).strip().lower() not in IGNORE_VALUES:
                             cleaned.append(str(n).strip())
                     elif isinstance(v, str):
-                        if v.strip().lower() not in ("n/a", "unknown", "none", ""):
+                        if v.strip().lower() not in IGNORE_VALUES:
                             cleaned.append(v.strip())
                 return cleaned
             return []
@@ -231,7 +232,14 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
 
         # Filter out empty/invalid lists
         def is_valid(lst):
-            return bool(lst and any(x and x.strip().lower() not in ("n/a", "unknown", "none", "") for x in lst))
+            # Only valid if at least one element is not in IGNORE_VALUES
+            # Also: if the list is non-empty but all elements are in IGNORE_VALUES, treat as invalid
+            if not lst:
+                return False
+            # If all elements are in IGNORE_VALUES (case-insensitive), invalid
+            if all((str(x or "").strip().lower() in IGNORE_VALUES) for x in lst):
+                return False
+            return True
 
         omdb_valid = is_valid(omdb_list)
         tmdb_valid = is_valid(tmdb_list)
@@ -261,10 +269,27 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         omdb_data.get("Writer") if omdb_data else None,
         tmdb_data.get("created_by") or tmdb_data.get("writers")
     )
-    # Directors
+    # Directors: If OMDb is missing or "N/A", fall back to TMDb crew (job == "Director") or created_by.
+    omdb_director_val = omdb_data.get("Director") if omdb_data else None
+    tmdb_director_val = tmdb_data.get("directors")
+    # If OMDb is missing or "N/A", use TMDb crew or created_by for shows
+    IGNORE_VALUES = ("n/a", "unknown", "none", "")
+    omdb_dir_list = []
+    if omdb_director_val:
+        if isinstance(omdb_director_val, str):
+            omdb_dir_list = [d.strip() for d in re.split(r"[;,]", omdb_director_val) if d.strip().lower() not in IGNORE_VALUES]
+        elif isinstance(omdb_director_val, list):
+            omdb_dir_list = [d.strip() for d in omdb_director_val if isinstance(d, str) and d.strip().lower() not in IGNORE_VALUES]
+    # If OMDb directors is empty or all invalid, fallback
+    if not omdb_dir_list:
+        # For TV, prefer created_by if present
+        if tmdb_data.get("created_by"):
+            tmdb_director_val = tmdb_data.get("created_by")
+        elif tmdb_data.get("directors"):
+            tmdb_director_val = tmdb_data.get("directors")
     meta["directors"] = merge_field(
-        omdb_data.get("Director") if omdb_data else None,
-        tmdb_data.get("directors")
+        omdb_director_val,
+        tmdb_director_val
     )
     # Cast
     meta["cast"] = merge_field(
@@ -276,6 +301,11 @@ def fetch_metadata(imdb_id, title=None, year=None, is_series=False, existing=Non
         omdb_data.get("Genre") if omdb_data else None,
         tmdb_data.get("genres")
     )
+    # --- Debug prints for raw/merged values ---
+    print(f"DEBUG directors: OMDb={omdb_data.get('Director') if omdb_data else None}, TMDb={tmdb_data.get('directors')} → {meta['directors']}")
+    print(f"DEBUG writers: OMDb={omdb_data.get('Writer') if omdb_data else None}, TMDb={tmdb_data.get('created_by') or tmdb_data.get('writers')} → {meta['writers']}")
+    print(f"DEBUG cast: OMDb={omdb_data.get('Actors') if omdb_data else None}, TMDb={tmdb_data.get('cast')} → {meta['cast']}")
+    print(f"DEBUG genres: OMDb={omdb_data.get('Genre') if omdb_data else None}, TMDb={tmdb_data.get('genres')} → {meta['genres']}")
     # Debug log
     if omdb_result and omdb_result.get("debug_log"):
         meta["debug_log"] = omdb_result["debug_log"]
@@ -395,8 +425,8 @@ def backfill_metadata(limit=20):
 
         meta = read_seed_meta(imdb_id)
         meta_source = "seed"
-        # If meta exists but directors, cast, or genres are missing, try to fetch again from OMDb/TMDB
-        if meta and (not meta.get("directors") or not meta.get("cast") or not meta.get("genres")):
+        # If meta exists but directors, cast, genres, or writers are missing, try to fetch again from OMDb/TMDB
+        if meta and (not meta.get("directors") or not meta.get("cast") or not meta.get("genres") or not meta.get("writers")):
             new_meta = fetch_metadata(imdb_id, title, year, is_series=(type_name == "show"))
             if new_meta:
                 if not meta.get("directors"):
@@ -405,6 +435,8 @@ def backfill_metadata(limit=20):
                     meta["cast"] = new_meta.get("cast", [])
                 if not meta.get("genres"):
                     meta["genres"] = new_meta.get("genres", [])
+                if not meta.get("writers"):
+                    meta["writers"] = new_meta.get("writers", [])
                 meta_source = "fetch"
         if not meta:
             meta = fetch_metadata(imdb_id, title, year, is_series=(type_name == "show"))
@@ -412,7 +444,7 @@ def backfill_metadata(limit=20):
             time.sleep(0.5)
             # If fetch_metadata returns None (should not anymore), set genres to ["Unknown"]
             if meta is None:
-                meta = {"directors": [], "cast": [], "genres": ["Unknown"]}
+                meta = {"directors": [], "cast": [], "genres": ["Unknown"], "writers": []}
 
         if meta and (meta.get("directors") or meta.get("cast") or meta.get("genres")):
             # Ensure genres is not empty; if so, set to ["Unknown"]
